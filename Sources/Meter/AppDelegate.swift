@@ -13,7 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // One sampling pass a second; the menu bar shows each pass's result.
         let timer = DispatchSource.makeTimerSource(queue: queue)
-        timer.schedule(deadline: .now(), repeating: .seconds(1), leeway: .milliseconds(20))
+        timer.schedule(deadline: .now(), repeating: .seconds(2), leeway: .milliseconds(20))
         timer.setEventHandler { [weak self] in self?.pass() }
         timer.resume()
         self.timer = timer

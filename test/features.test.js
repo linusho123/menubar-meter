@@ -8,7 +8,8 @@ runFeatures(path.join(__dirname, '..', 'features'), {
   'menu-bar-readout': require('./steps/menu-bar-readout.steps'),
 }, {
   wip: [
-    'menu-bar-readout',
+    // The network and disk rows need the panel's network and disk lines (P5).
+    { feature: 'menu-bar-readout', scenarios: ['A value with no fresh reading turns into a dash'] },
     'recent-history',
     'heavy-tasks',
     'ending-tasks',

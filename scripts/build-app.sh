@@ -9,6 +9,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 VERSION=$(node -p "require('./package.json').version")
+ONLY=${METER_BUILD_ONLY:-all} # all | release | test (a partial rebuild for mutation probes)
 
 bundle() { # <swift build path> <bundle dir> <bundle id>
   bin="$1/release/Meter"
@@ -21,11 +22,16 @@ bundle() { # <swift build path> <bundle dir> <bundle id>
   echo "built $app"
 }
 
-swift build -c release --product Meter --build-path .build/release-app
-bundle .build/release-app build/release local.menubar-meter
+if [ "$ONLY" != test ]; then
+  swift build -c release --product Meter --build-path .build/release-app
+  bundle .build/release-app build/release local.menubar-meter
+fi
 
-swift build -c release --product Meter --build-path .build/test-app -Xswiftc -DMETER_TEST_SOURCE
-bundle .build/test-app build/test local.menubar-meter.test-source
+if [ "$ONLY" != release ]; then
+  swift build -c release --product Meter --build-path .build/test-app -Xswiftc -DMETER_TEST_SOURCE
+  bundle .build/test-app build/test local.menubar-meter.test-source
+fi
+[ "$ONLY" = all ] || exit 0
 
 swift build -c release --product meter-harness --build-path .build/harness
 mkdir -p build
