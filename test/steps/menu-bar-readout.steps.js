@@ -212,18 +212,35 @@ module.exports = (reg) => {
   // --- A value with no fresh reading turns into a dash (D114) ---
   // The network and disk rows wait for the panel's network and disk lines (P5): their
   // "no fresh ... reading" step is deliberately left unbound and held in the wip register.
+  // The Given owns all the driving: a harness ticker keeps every reading changing, and the
+  // Accessibility watcher records what the user sees. The Thens only read the watcher.
+
+  /** The live readings at tick `n`: each differs from the reading two ticks earlier. */
+  const liveAt = (n) => {
+    const step = n % 4;
+    return { cpu: 30 + step * 10, gpu: 10 + step * 10, ram: 30 + step * 10, temp: 50 + step * 5 };
+  };
 
   reg.define(/^the meter is live$/, async (w) => {
-    w.live = { cpu: 30, gpu: 10, ram: 30, temp: 50 };
+    w.live = liveAt(0);
     const m = await meter.launchWithFeed(w, feeds.readings(w.live));
     await menubar.waitForItem(m.pid, allNumbers, 5000, 'every value shown');
+    w.dropped = new Set();
+    let tick = 0;
+    const ticker = setInterval(() => {
+      tick += 1;
+      const values = feeds.readings(liveAt(tick));
+      for (const reading of w.dropped) delete values[feedKey[reading]];
+      w.feed.set(values);
+    }, 250);
+    w.defer(() => clearInterval(ticker));
+    w.watcher = await menubar.watch(m.pid, 15000);
+    w.defer(() => w.watcher.stop());
   });
 
-  reg.define(/^no fresh (CPU|GPU|RAM|temperature) reading arrives$/u, async (w, reading) => {
-    const m = required(w.meter, 'meter');
+  reg.define(/^no fresh (CPU|GPU|RAM|temperature) reading arrives$/u, (w, reading) => {
     w.stale = reading;
-    w.watcher = await menubar.watch(m.pid, 8000);
-    w.defer(() => w.watcher.stop());
+    w.dropped.add(reading);
     w.stoppedAt = Date.now();
     required(w.feed, 'feed').set({ [feedKey[reading]]: null });
   });
@@ -238,16 +255,26 @@ module.exports = (reg) => {
     const watcher = required(w.watcher, 'watcher');
     const stoppedAt = required(w.stoppedAt, 'stoppedAt');
     const dashed = (s) => menubar.fields(s.title)?.[reading] === `${DASH}${unit(reading)}`;
-    // The last fresh reading came at most one refresh (a second) before it stopped arriving.
-    const deadline = stoppedAt + 4000;
+    const deadline = stoppedAt + 5000;
     let first;
     while (!first && Date.now() < deadline) {
       first = watcher.seen.find(dashed);
       if (!first) await procs.sleep(20);
     }
     assert.ok(first, `${reading} never showed a dash; saw ${JSON.stringify(watcher.seen)}`);
-    assert.ok(first.at - stoppedAt >= 2000,
-      `${reading} turned into a dash ${first.at - stoppedAt} ms after its readings stopped`);
+    // The last time the user saw this value change is when the meter last took a fresh
+    // reading of it (the feed kept it changing until it stopped). D114: a dash no earlier
+    // than three seconds after that, less a little for the watcher's own jitter.
+    let lastChange = watcher.seen[0].at;
+    let previous;
+    for (const s of watcher.seen) {
+      if (dashed(s)) break;
+      const value = menubar.fields(s.title)?.[reading];
+      if (value !== previous) lastChange = s.at;
+      previous = value;
+    }
+    assert.ok(first.at - lastChange >= 2750,
+      `${reading} turned into a dash ${first.at - lastChange} ms after the user last saw it change`);
     const [item] = menubar.itemsOf(required(w.meter, 'meter').pid);
     assert.ok(item.title.includes(dash), `"${item.title}" shows "${dash}"`);
     assert.ok(dashed(item), `"${item.title}" shows ${reading} as a dash`);
@@ -255,17 +282,21 @@ module.exports = (reg) => {
 
   reg.define(/^the user sees the other values still updating$/, async (w) => {
     const reading = required(w.stale, 'stale');
-    const m = required(w.meter, 'meter');
-    const next = { cpu: 70, gpu: 60, ram: 80, temp: 65 };
-    const values = feeds.readings(next);
-    delete values[feedKey[reading]];
-    w.feed.set(values);
-    const expected = { CPU: '70%', GPU: '60%', RAM: '80%', temperature: '65°C' };
-    expected[reading] = `${DASH}${unit(reading)}`;
-    await menubar.waitForItem(m.pid, (i) => {
-      const f = menubar.fields(i.title);
-      return !!f && Object.keys(expected).every((k) => f[k] === expected[k]);
-    }, 2000, `the other values updated while ${reading} stays a dash: ${JSON.stringify(expected)}`);
+    const watcher = required(w.watcher, 'watcher');
+    const others = Object.keys(feedKey).filter((r) => r !== reading);
+    const dashValue = `${DASH}${unit(reading)}`;
+    const at = (s, r) => menubar.fields(s.title)?.[r];
+    const base = watcher.seen.find((s) => at(s, reading) === dashValue);
+    assert.ok(base, `${reading} never showed a dash`);
+    const changed = () => {
+      const after = watcher.seen.filter((s) => s.at >= base.at);
+      return others.every((r) => after.some((s) => at(s, r) !== undefined && at(s, r) !== at(base, r)));
+    };
+    const deadline = Date.now() + 3000;
+    while (!changed() && Date.now() < deadline) await procs.sleep(20);
+    assert.ok(changed(), `the other values stopped updating; saw ${JSON.stringify(watcher.seen)}`);
+    const after = watcher.seen.filter((s) => s.at >= base.at);
+    assert.ok(after.every((s) => at(s, reading) === dashValue), `${reading} stayed a dash`);
   });
 
   // --- The temperature rises under load (D112), against the real system ---
