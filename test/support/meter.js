@@ -29,9 +29,9 @@ async function launchReal(world) {
   return meter;
 }
 
-/** Starts a stand-in status item, which macOS places to the left of the meter's. */
-async function launchNeighbor(world) {
-  const neighbor = procs.start(paths.neighbor, ['NB']);
+/** Starts a stand-in status item titled `title`, a menu bar icon the harness owns. */
+async function launchNeighbor(world, title) {
+  const neighbor = procs.start(paths.neighbor, [title]);
   world.defer(() => procs.end(neighbor));
   await menubar.waitForItem(neighbor.pid, () => true, 10000, 'the stand-in status item');
   return neighbor;

@@ -75,6 +75,8 @@ module.exports = (reg) => {
   reg.define(
     /^the menu bar item has been showing CPU (\d+)%, GPU (\d+)%, RAM (\d+)% and (\d+)°C$/,
     async (w, cpu, gpu, ram, temp) => {
+      // Stand-in status items started before and after the meter, so icons sit to its left.
+      await meter.launchNeighbor(w, 'NB1');
       const m = await meter.launchWithFeed(w, feeds.readings({
         cpu: Number(cpu), gpu: Number(gpu), ram: Number(ram), temp: Number(temp),
       }));
@@ -83,7 +85,7 @@ module.exports = (reg) => {
         const f = menubar.fields(i.title);
         return !!f && Object.keys(shows).every((k) => f[k] === shows[k]);
       }, 5000, `the item showing ${JSON.stringify(shows)}`);
-      await meter.launchNeighbor(w);
+      await meter.launchNeighbor(w, 'NB2');
       await procs.sleep(500);
       const [before] = menubar.itemsOf(m.pid);
       w.before = before;
