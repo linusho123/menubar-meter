@@ -1,10 +1,13 @@
 {
   "name": "menubar-meter",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "A macOS menu bar meter: CPU, GPU, RAM and chip temperature.",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build:app": "sh scripts/build-app.sh",
+    "test": "npm run build:app && node --test --test-concurrency=1 \"test/*.test.js\"",
+    "test:unit": "sh scripts/test-unit.sh",
+    "lint": "swift format lint --strict --recursive Sources Tests",
+    "scope": "node scripts/lint-scope.js"
   },
   "keywords": [],
   "author": "",
@@ -13,5 +16,6 @@
   "devDependencies": {
     "@bingh/docketry": "^0.1.0",
     "gherkin-node-test": "^0.11.0"
-  }
+  },
+  "private": true
 }

@@ -185,7 +185,11 @@ matches Activity Monitor's definition (app + wired + compressed, cache
 excluded), that the test source can never reach a Then, and that a stale
 reading cannot show an old number.
 
-**Register after P1:** `menu-bar-readout` leaves `wip`.
+**Register after P1:** `menu-bar-readout` leaves `wip` except D114's network and
+disk rows ("A value with no fresh reading turns into a dash"), which show their
+dash only in the panel's network and disk lines and so wait for P5. That one
+scenario-scoped entry stays in `wip`; P5 closes it. The contract is untouched
+(visionary's ruling, P1).
 **Expected probes:** a label order swapped, left-aligned numbers, width that
 follows the text, rounding down, RAM counting cache, CPU without System, a
 GPU figure from the wrong source, a refresh every two seconds, a GPU-only
@@ -291,7 +295,9 @@ virtual interfaces Activity Monitor leaves out.
 999.9 KB/s, 1.0 MB/s, GB/s) with Activity Monitor's prefixes, rates from
 counter deltas including a counter reset, the interface filter (loopback
 and virtual interfaces left out).
-**Register:** `network-and-disk` leaves `wip`.
+**Register:** `network-and-disk` leaves `wip`, and so does the scenario-scoped
+`menu-bar-readout` entry left by P1 (D114's network and disk rows, bound here
+against the panel's two lines).
 **Expected probes:** binary prefixes, megabits, a missing unit step, loopback
 counted, a half-line dash.
 
@@ -336,6 +342,10 @@ measuring a debug build, a test reading source left compiled in.
 **Unit tests:** the measurement arithmetic (CPU share from CPU-time deltas
 over a minute, peak as well as mean, memory in Activity Monitor's units),
 and any optimisation this phase makes, pinned at its boundary.
+**Refresh cadence (visionary's ruling, P1):** the readout is composed every 0.5 s
+and the CPU counters read every 0.25 s (D115). P7 holds this cost to under 1%
+CPU with the panel closed, and may slow the cadence only if D115 (a change
+shows within a second) still passes with margin.
 **Register:** `own-cost` leaves `wip` (the 7-day row and energy per Q2/Q3);
 the register is then empty.
 **Exit:** the whole contract passes, all three workstack legs green; a
