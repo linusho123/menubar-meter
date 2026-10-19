@@ -1,0 +1,83 @@
+{"run-manifest":1}
+{"file":"features/ending-tasks.feature","title":"A task that exits while showing Force Quit just leaves","status":"unbound"}
+{"file":"features/ending-tasks.feature","title":"Clicking Ending again does nothing","status":"unbound"}
+{"file":"features/ending-tasks.feature","title":"Ending a task that quits","status":"unbound"}
+{"file":"features/ending-tasks.feature","title":"Force Quit appears only for a task still running after five seconds [1]","status":"unbound"}
+{"file":"features/ending-tasks.feature","title":"Force Quit appears only for a task still running after five seconds [2]","status":"unbound"}
+{"file":"features/ending-tasks.feature","title":"Force Quit ends the task outright","status":"unbound"}
+{"file":"features/ending-tasks.feature","title":"The ending state follows its task when rows move","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"A long-running hog is never nudged or ended by the app","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"A macOS or other-user task is listed as system with no End [1]","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"A macOS or other-user task is listed as system with no End [2]","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"A macOS or other-user task is listed as system with no End [3]","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"A macOS or other-user task is listed as system with no End [4]","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"A task's CPU is its share of the whole Mac [1]","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"A task's CPU is its share of the whole Mac [2]","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"A task's CPU is its share of the whole Mac [3]","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"A task's GPU value is Activity Monitor's % GPU for it","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"A task's RAM is its share of the Mac's memory [1]","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"A task's RAM is its share of the Mac's memory [2]","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"A task's RAM is its share of the Mac's memory [3]","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"A tie is broken alphabetically","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"An extra row appears only for a real GPU or RAM hog [1]","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"An extra row appears only for a real GPU or RAM hog [2]","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"An extra row appears only for a real GPU or RAM hog [3]","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"An extra row appears only for a real GPU or RAM hog [4]","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"Open Activity Monitor from the panel","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"The meter counts against the Mac it runs on [1]","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"The meter counts against the Mac it runs on [2]","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"The meter counts against the Mac it runs on [3]","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"The meter in its own list has no End button","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"The row under the pointer holds while it rests on End","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"The top five by CPU, then the biggest GPU and RAM hogs","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"The user's own tasks outside /System keep their End button","status":"unbound"}
+{"file":"features/menu-bar-readout.feature","title":"A value with no fresh reading turns into a dash [1]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"A value with no fresh reading turns into a dash [2]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"A value with no fresh reading turns into a dash [3]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"A value with no fresh reading turns into a dash [4]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"A value with no fresh reading turns into a dash [5]","status":"unbound"}
+{"file":"features/menu-bar-readout.feature","title":"A value with no fresh reading turns into a dash [6]","status":"unbound"}
+{"file":"features/menu-bar-readout.feature","title":"CPU matches Activity Monitor's total load","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"GPU is macOS's own overall GPU reading","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"RAM matches Activity Monitor's Memory Used [1]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"RAM matches Activity Monitor's Memory Used [2]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"RAM matches Activity Monitor's Memory Used [3]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"Reading the values in the menu bar [1]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"Reading the values in the menu bar [2]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"Reading the values in the menu bar [3]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"Rounding the menu bar readout [1]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"Rounding the menu bar readout [2]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"Rounding the menu bar readout [3]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"Rounding the menu bar readout [4]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"Rounding the menu bar readout [5]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"The menu bar item keeps one width [1]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"The menu bar item keeps one width [2]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"The menu bar item keeps one width [3]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"The readout follows a change within a second [1]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"The readout follows a change within a second [2]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"The readout follows a change within a second [3]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"The readout follows a change within a second [4]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"The readout follows a change within a second [5]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"The readout follows a change within a second [6]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"The temperature rises under load","status":"passed"}
+{"file":"features/network-and-disk.feature","title":"Network and disk match Activity Monitor [1]","status":"unbound"}
+{"file":"features/network-and-disk.feature","title":"Network and disk match Activity Monitor [2]","status":"unbound"}
+{"file":"features/own-cost.feature","title":"The meter is never flagged as an energy hog","status":"unbound"}
+{"file":"features/own-cost.feature","title":"The meter's memory stays under its line [1]","status":"unbound"}
+{"file":"features/own-cost.feature","title":"The meter's memory stays under its line [2]","status":"unbound"}
+{"file":"features/own-cost.feature","title":"The meter's own CPU stays under its line [1]","status":"unbound"}
+{"file":"features/own-cost.feature","title":"The meter's own CPU stays under its line [2]","status":"unbound"}
+{"file":"features/presence.feature","title":"A quit meter stays gone until the next login","status":"unbound"}
+{"file":"features/presence.feature","title":"Esc closes the panel opened by the shortcut","status":"unbound"}
+{"file":"features/presence.feature","title":"Installing a newer version replaces the old one","status":"unbound"}
+{"file":"features/presence.feature","title":"One install step puts the meter in the menu bar","status":"unbound"}
+{"file":"features/presence.feature","title":"Quit Meter removes the meter","status":"unbound"}
+{"file":"features/presence.feature","title":"The meter appears by itself at login","status":"unbound"}
+{"file":"features/presence.feature","title":"The meter comes back by itself after a crash [1]","status":"unbound"}
+{"file":"features/presence.feature","title":"The meter comes back by itself after a crash [2]","status":"unbound"}
+{"file":"features/presence.feature","title":"The shortcut opens and closes the panel from any app","status":"unbound"}
+{"file":"features/recent-history.feature","title":"A history shorter than the window leaves the graph's left empty","status":"unbound"}
+{"file":"features/recent-history.feature","title":"A spike stays in the graph only while it is under five minutes old [1]","status":"unbound"}
+{"file":"features/recent-history.feature","title":"A spike stays in the graph only while it is under five minutes old [2]","status":"unbound"}
+{"file":"features/recent-history.feature","title":"Clicking the item opens the five-minute graph","status":"unbound"}
+{"file":"features/recent-history.feature","title":"The time the Mac slept is a gap in the graph","status":"unbound"}
