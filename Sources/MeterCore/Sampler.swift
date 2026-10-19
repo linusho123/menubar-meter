@@ -23,9 +23,11 @@ public final class Sampler {
   private let inputs: MeterInputs
   private var lastTicks: Timestamped<CPUTicks>?
 
-  public private(set) var cpu: Timestamped<Int>?
-  public private(set) var gpu: Timestamped<Int>?
-  public private(set) var ram: Timestamped<Int>?
+  // CPU, GPU and RAM are kept as exact shares: the menu bar rounds them to whole numbers,
+  // the panel to one decimal, each from the same exact reading.
+  public private(set) var cpu: Timestamped<Share>?
+  public private(set) var gpu: Timestamped<Share>?
+  public private(set) var ram: Timestamped<Share>?
   public private(set) var temperature: Timestamped<Int>?
 
   public init(inputs: MeterInputs) {
@@ -35,7 +37,7 @@ public final class Sampler {
   /// Reads the CPU counters and, from the previous read, the CPU load.
   public func sampleCPU(now: Double) {
     guard let ticks = inputs.cpuTicks() else { return }
-    if let last = lastTicks, let load = CPULoad.busyPercent(from: last.value, to: ticks) {
+    if let last = lastTicks, let load = CPULoad.busyShare(from: last.value, to: ticks) {
       cpu = Timestamped(load, at: now)
     }
     lastTicks = Timestamped(ticks, at: now)
@@ -44,15 +46,15 @@ public final class Sampler {
   /// Reads memory, GPU and temperature, then composes the readout with stale values dashed.
   public func pass(now: Double) -> Readout {
     if let pages = inputs.memoryPages(),
-      let percent = MemoryUsed.percent(
+      let share = MemoryUsed.share(
         pages, pageSize: inputs.pageSize, physicalMemory: inputs.physicalMemory)
     {
-      ram = Timestamped(percent, at: now)
+      ram = Timestamped(share, at: now)
     }
     if let stats = inputs.gpuPerformanceStatistics(),
-      let percent = GPUUtilization.percent(performanceStatistics: stats)
+      let share = GPUUtilization.share(performanceStatistics: stats)
     {
-      gpu = Timestamped(percent, at: now)
+      gpu = Timestamped(share, at: now)
     }
     if let sensors = inputs.temperatureSensors(),
       let celsius = ChipTemperature.celsius(sensors: sensors)
@@ -64,9 +66,23 @@ public final class Sampler {
 
   public func readout(now: Double) -> Readout {
     Readout(
-      cpu: Staleness.fresh(cpu, now: now),
-      gpu: Staleness.fresh(gpu, now: now),
-      ram: Staleness.fresh(ram, now: now),
+      cpu: Staleness.fresh(cpu, now: now)?.wholePercent,
+      gpu: Staleness.fresh(gpu, now: now)?.wholePercent,
+      ram: Staleness.fresh(ram, now: now)?.wholePercent,
       temperature: Staleness.fresh(temperature, now: now))
+  }
+
+  /// The panel's current values: CPU, GPU and RAM in tenths of a percent, nil when stale.
+  public func legend(now: Double) -> LegendValues {
+    LegendValues(
+      cpu: Staleness.fresh(cpu, now: now)?.tenthsOfPercent,
+      gpu: Staleness.fresh(gpu, now: now)?.tenthsOfPercent,
+      ram: Staleness.fresh(ram, now: now)?.tenthsOfPercent)
+  }
+
+  /// Forgets the last CPU counter read, so the next load is measured from a fresh pair of
+  /// reads (after the Mac wakes: a load spanning the sleep is no reading of now).
+  public func resetCPUBaseline() {
+    lastTicks = nil
   }
 }

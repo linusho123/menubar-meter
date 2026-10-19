@@ -97,7 +97,71 @@ function readings({ cpu, gpu, ram, temp }) {
   return { cpu: cpuLoad(cpu), gpu: gpuAt(gpu), memory: memoryAt(ram), sensors: sensorsAt(temp) };
 }
 
+/**
+ * A past for the meter to have run through before it launches, given in ages (seconds before
+ * the launch): a CPU, GPU and RAM level that holds unless a stretch sets another, and stretches
+ * the Mac slept through. The test source drives the meter's own loop through it on the past's
+ * own clock, so five minutes of history take no five minutes of waiting.
+ */
+class Past {
+  constructor(seconds, levels = {}) {
+    this.seconds = seconds;
+    this.levels = { cpu: 5, gpu: 3, ram: 45, temp: 50, ...levels };
+    this.stretches = [];
+    this.sleeps = [];
+  }
+
+  /** `metric` is at `value` from `fromAge` seconds ago until `toAge` seconds ago (0 is now). */
+  hold(metric, fromAge, toAge, value) {
+    this.stretches.push({ metric, fromAge, toAge, value });
+    return this;
+  }
+
+  /** The Mac slept from `fromAge` seconds ago until `toAge` seconds ago. */
+  asleep(fromAge, toAge) {
+    this.sleeps.push({ fromAge, toAge });
+    return this;
+  }
+
+  level(metric, age) {
+    let value = this.levels[metric];
+    for (const s of this.stretches) {
+      if (s.metric === metric && age <= s.fromAge && age >= s.toAge) value = s.value;
+    }
+    return value;
+  }
+
+  readingsAt(age) {
+    return readings({
+      cpu: this.level('cpu', age), gpu: this.level('gpu', age), ram: this.level('ram', age),
+      temp: this.level('temp', age),
+    });
+  }
+
+  /** The feed: the readings now, and the past as consecutive stretches ending now. */
+  feed() {
+    const ages = new Set([this.seconds, 0]);
+    for (const s of [...this.stretches, ...this.sleeps]) {
+      for (const age of [s.fromAge, s.toAge]) if (age > 0 && age < this.seconds) ages.add(age);
+    }
+    const bounds = [...ages].sort((a, b) => b - a);
+    const past = [];
+    for (let i = 0; i + 1 < bounds.length; i++) {
+      const seconds = bounds[i] - bounds[i + 1];
+      const middle = (bounds[i] + bounds[i + 1]) / 2;
+      if (this.sleeps.some((s) => middle <= s.fromAge && middle >= s.toAge)) {
+        past.push({ seconds, asleep: true });
+      } else {
+        const values = this.readingsAt(middle);
+        delete values.cpu.since;
+        past.push({ seconds, ...values });
+      }
+    }
+    return { ...this.readingsAt(0), past };
+  }
+}
+
 module.exports = {
-  Feed, readings, cpuLoad, cpuSplit, memoryAt, memoryUsedGB, gpuAt, sensorsAt,
+  Feed, Past, readings, cpuLoad, cpuSplit, memoryAt, memoryUsedGB, gpuAt, sensorsAt,
   physicalMemory, pageSize, GiB,
 };

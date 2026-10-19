@@ -34,6 +34,13 @@ public enum MemoryUsed {
   public static func percent(_ pages: MemoryPages, pageSize: UInt64, physicalMemory: UInt64)
     -> Int?
   {
-    Rounding.wholePercent(part: bytes(pages, pageSize: pageSize), whole: physicalMemory)
+    share(pages, pageSize: pageSize, physicalMemory: physicalMemory)?.wholePercent
+  }
+
+  /// Memory Used as an exact share of the Mac's physical memory.
+  public static func share(_ pages: MemoryPages, pageSize: UInt64, physicalMemory: UInt64)
+    -> Share?
+  {
+    Share(part: bytes(pages, pageSize: pageSize), whole: physicalMemory)
   }
 }
