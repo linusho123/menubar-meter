@@ -4,7 +4,10 @@ The reviewed contract is `features/` (signed D116). The feature files bind,
 `DESIGN.md` bounds, and `USER-NEEDS.md` explains. Each phase binds one
 feature file to real tests under the gherkin-node-test ratchet: a feature leaves the `wip` register only
 when every one of its steps is bound and green, `wip` only shrinks, and the
-run manifest (`run-manifest.ndjson`) is committed with every phase.
+run manifest (`run-manifest.ndjson`) is committed with every phase. Every
+phase passes the full aBDD workstack before it merges: the acceptance
+criteria (the feature suite), unit tests (`npm run test:unit`) and lint
+(`npm run lint` and `npm run scope`).
 
 Phases run in need-weight order where dependencies allow: N0's readout first
 (it builds the app and the harness every later phase uses), then N0's history,
@@ -15,13 +18,15 @@ last, measured over the finished app.
 
 1. **Cold builder** (opus) on branch `pN-<name>`, cut from `master` at the
    phase base, with a self-contained brief. It builds the behaviour, binds the
-   phase's scenarios, runs its mutation probes, and commits on the branch.
+   phase's scenarios, writes the phase's unit tests, runs its mutation probes,
+   runs all three workstack legs (step 5), and commits on the branch.
 2. **Two independent cold reviewers** (sonnet), read-only. Neither sees the
    other's review or the builder's report.
    - **Reviewer A — contract and test honesty:** every scenario bound as
      written, every Then far-side, every probe real, nothing on the fence
      built, no feature file, docket, fence, ledger or `[ruled]` DESIGN line
-     edited.
+     edited; unit tests present for the phase's logic and not standing in
+     for a bound scenario; no lint rule disabled or suppressed to pass.
    - **Reviewer B — the phase's named risk** (each phase names it below).
 3. **Head reviewer** (opus) reconciles both reviews against the code and the
    contract into one ranked fix list, runs its own mutation probes, and drops
@@ -31,15 +36,30 @@ last, measured over the finished app.
 4. **Fix round** (sonnet) on the same branch, a failing test before each fix;
    a fresh verifier (opus) confirms each fix's test failed before and passes
    after. Then the gate.
-5. **Gate:** `caffeinate -i npm test` with the Mac **plugged in and the lid
-   open** (lid closed on battery is Clamshell Sleep and stalls the run;
-   check `pmset -g log` before blaming code), then `npm run scope`. Exit
-   codes reported.
+5. **Gate — the aBDD workstack, three legs, all must exit 0:**
+   - **Acceptance criteria:** `caffeinate -i npm test` (build, bundle, the
+     feature suite under the `wip` ratchet) with the Mac **plugged in and the
+     lid open** (lid closed on battery is Clamshell Sleep and stalls the run;
+     check `pmset -g log` before blaming code).
+   - **Unit tests:** `npm run test:unit` (Swift Testing through `swift
+     test`, from the Command Line Tools) — the builder adds unit tests for
+     the logic below the menu bar and the panel (each phase names it
+     below), alongside the bound scenarios, never instead of them. Unit
+     tests run against `MeterCore` with fixed inputs; they never touch the
+     real system or the UI.
+   - **Lint:** `npm run lint` — `swift format lint --strict` over `Sources/`
+     and `Tests/` (the toolchain's own swift-format 6.3, configuration in
+     `.swift-format`) — plus `npm run scope` (strict feature and docket
+     lints).
+   Exit codes of each leg reported.
 6. **Integrate:** merge to `master`, commit the run manifest, store a
    treecontext resume pointer that supersedes the last one, report, and
    **stop for the visionary's go-ahead** before the next phase.
 
-Run each phase with `/build-pipeline <phase>`.
+Run each phase with `/build-pipeline <phase>`. Models (checked in
+`~/.claude/workflows/build-phase.js`, DEFAULT_MODELS): builder opus, both
+reviewers sonnet, head reviewer and verifier opus, fixer sonnet; the gate
+inherits the session's model.
 
 ## Acceptance bars, every phase
 
@@ -65,6 +85,11 @@ Run each phase with `/build-pipeline <phase>`.
 - **The fence holds.** Nothing on `OUT-OF-SCOPE.md` is built: no peak values,
   no crowded-bar fallback, no multi-display handling, no settings, no
   update checks, no per-core view, no clean-removal tooling.
+- **Unit tests and lint are their own legs.** A unit test pins a rule at its
+  boundary (rounding at .5, the five-minute edge, 999.9 KB/s) faster and
+  more exactly than a scenario can, but it never counts as binding a
+  scenario. Lint is `--strict` and clean: no rule switched off in
+  `.swift-format` and no ignore comment added to get a phase through.
 - **Never edited by a phase:** `features/*.feature`, `features/DOCKET.md`,
   `features/OUT-OF-SCOPE.md`, `features/USER-NEEDS.md`, `[ruled]` lines in
   `features/DESIGN.md`. A `[chosen]` DESIGN change appends a changelog line.
@@ -130,8 +155,30 @@ builder finds it false, stop and raise it).
 - Independent probes: `top -l 2` (CPU), `vm_stat` + `sysctl hw.memsize`
   (Memory Used, Activity Monitor's definition), `ioreg` (GPU); a load
   generator with N busy cores.
-- `npm test` (build, bundle, suite) and `npm run scope` (strict feature and
-  docket lints).
+- The SwiftPM layout every phase extends: a `MeterCore` library (sampling
+  arithmetic, formatting, staleness — no AppKit), the `Meter` app target,
+  and a `MeterCoreTests` test target using Swift Testing (`import Testing`).
+  Without Xcode, plain `swift test` cannot find the `Testing` module: the
+  package declares `platforms: [.macOS(.v14)]` and `npm run test:unit` runs
+  `swift test` with the Command Line Tools' framework paths (checked on this
+  Mac, Swift 6.3.3, 2026-10-19):
+  `-Xswiftc -F -Xswiftc $F -Xlinker -F -Xlinker $F -Xlinker -rpath -Xlinker
+  $F -Xlinker -rpath -Xlinker $L`, where `$F` is
+  `/Library/Developer/CommandLineTools/Library/Developer/Frameworks` and `$L`
+  is `/Library/Developer/CommandLineTools/Library/Developer/usr/lib`.
+- The three workstack commands every later phase runs: `npm test` (build,
+  bundle, suite), `npm run test:unit` (unit tests), `npm run lint` (`swift
+  format lint --strict --recursive Sources Tests`, with a committed
+  `.swift-format` at the toolchain's defaults) and `npm run scope` (strict
+  feature and docket lints). `.gitignore` covers `.build/` and the bundle
+  output.
+
+**Unit tests:** the rounding rule at its boundaries (0.4, 0.5, 99.5, 100,
+never over 100), the fixed-width text (every slot three digits wide for 0,
+7, 42 and 100; the dash in a slot keeps the width), CPU as User + System
+from tick deltas, Memory Used from page counts (app + wired + compressed,
+cache excluded) divided by 32 GB, the staleness rule (a reading older than
+three seconds is a dash; exactly three is not), and the label order.
 
 **Reviewer B's risk:** far-side honesty of the numbers — that Memory Used
 matches Activity Monitor's definition (app + wired + compressed, cache
@@ -143,8 +190,9 @@ reading cannot show an old number.
 follows the text, rounding down, RAM counting cache, CPU without System, a
 GPU figure from the wrong source, a refresh every two seconds, a GPU-only
 refresh lag, no dash, a dash for the wrong reading, a frozen temperature.
-**Exit:** the feature passes; scope clean; manifest committed; DESIGN gains
-changelog lines for the SwiftPM build and the reading sources.
+**Exit:** the feature passes; `npm run test:unit` green; `npm run lint` and
+`npm run scope` clean; manifest committed; DESIGN gains changelog lines for the
+SwiftPM build, the unit-test and lint tooling, and the reading sources.
 
 ## P2 — Recent history
 
@@ -164,6 +212,10 @@ real sleep checked by the visionary if they wish.
 **Reviewer B's risk:** time — off-by-one at the five-minute edge, clock jumps
 on wake, flakiness from wall-clock waits (the harness must drive time through
 the test source, never sleep five real minutes).
+**Unit tests:** the ring at the five-minute edge (a sample at 300 s kept, at
+300.001 s dropped), a gap inserted for sleep and never joined, a clock jump
+forward or back on wake, legend rounding to one decimal, the axis fixed at
+0–100% whatever the data.
 **Register:** `recent-history` leaves `wip`.
 **Expected probes:** a six-minute window, a stretched axis, a line joined
 across sleep, history cleared on wake, a peak value shown, legend rounding.
@@ -189,6 +241,12 @@ row, read through Accessibility; the list read through Accessibility.
 **Reviewer B's risk:** safety of the `system` rule — no End ever offered for
 a `/System` or other-user task (loginwindow!), path checks that a symlink or
 a lookalike name cannot fool; and ranking stability under the hold.
+**Unit tests:** ranking (top five by whole-Mac CPU share, ties
+alphabetical), the extra GPU and RAM rows at 10.0% vs 10.1%, a hog already
+in the top five not repeated, the `system` rule over owner and resolved path
+(`/System`, a symlink into `/System`, a lookalike `/Systems`, another
+user), the meter's own row as `system`, the hold keeping the row under the
+pointer in place.
 **Register:** `heavy-tasks` leaves `wip`.
 **Expected probes:** per-core CPU, ranking by RAM, an extra row at 9.9%, End
 on loginwindow, End on WindowServer, ties by pid, a coloured tag, the hold
@@ -208,6 +266,10 @@ a stand-in task that ignores the polite quit; `ps` before and after.
 **Reviewer B's risk:** signalling the wrong process — pid reuse, a row that
 moved, a stale state after the task exits; and that a test can never end
 anything it did not spawn.
+**Unit tests:** the End state machine (End → `Ending…` → gone, or →
+Force Quit at five seconds, not before), a second click ignored while
+`Ending…`, state keyed to pid and start time (a reused pid gets no state),
+the task leaving while Force Quit shows.
 **Register:** `ending-tasks` leaves `wip`.
 **Expected probes:** a confirmation dialog, Force Quit at three seconds, a
 second click that re-sends, the state left on the old row, a kill on End.
@@ -225,6 +287,10 @@ loopback download) for a non-idle row.
 **Reviewer B's risk:** unit boundaries (999.9 KB/s vs 1.0 MB/s, decimal vs
 binary prefixes as Activity Monitor uses them) and counting loopback or
 virtual interfaces Activity Monitor leaves out.
+**Unit tests:** byte formatting at every unit step (999 bytes/s, 1.0 KB/s,
+999.9 KB/s, 1.0 MB/s, GB/s) with Activity Monitor's prefixes, rates from
+counter deltas including a counter reset, the interface filter (loopback
+and virtual interfaces left out).
 **Register:** `network-and-disk` leaves `wip`.
 **Expected probes:** binary prefixes, megabits, a missing unit step, loopback
 counted, a half-line dash.
@@ -247,6 +313,10 @@ the installer run against a scratch install location where the test allows.
 **Reviewer B's risk:** crash vs quit confusion, a relaunch loop, a hot key
 that steals a combination another app uses, an installer that leaves two
 copies.
+**Unit tests:** the keep-alive's decision (relaunch after a crash exit,
+never after Quit Meter, a back-off that cannot loop), the hot key's
+combination (⌃⌥⌘M, not ⌥⌘M), version comparison for reinstall over an
+older copy.
 **Register:** `presence` leaves `wip` (login steps per Q1).
 **Expected probes:** relaunch after Quit, no relaunch after a crash, ⌥⌘M
 instead of ⌃⌥⌘M, history kept across a crash, an update prompt.
@@ -263,7 +333,10 @@ inside the lines, never by sampling less often than the contract demands.
 minute; Activity Monitor's Memory column for the meter; the battery menu.
 **Reviewer B's risk:** measurement honesty — averaging that hides spikes,
 measuring a debug build, a test reading source left compiled in.
+**Unit tests:** the measurement arithmetic (CPU share from CPU-time deltas
+over a minute, peak as well as mean, memory in Activity Monitor's units),
+and any optimisation this phase makes, pinned at its boundary.
 **Register:** `own-cost` leaves `wip` (the 7-day row and energy per Q2/Q3);
 the register is then empty.
-**Exit:** the whole contract passes; a release build installed on this Mac
-through the one-step installer.
+**Exit:** the whole contract passes, all three workstack legs green; a
+release build installed on this Mac through the one-step installer.
