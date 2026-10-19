@@ -126,27 +126,23 @@ final class PanelController {
     legend.attributedStringValue = Self.legendText(engine.legend(now: at))
   }
 
-  /// The legend: each label in its line's colour, then its current value (D19).
+  /// The legend's text (D19), each line's label in that line's colour.
   private static func legendText(_ values: LegendValues) -> NSAttributedString {
     let size = NSFont.systemFontSize
-    let plain: [NSAttributedString.Key: Any] = [
-      .font: NSFont.monospacedDigitSystemFont(ofSize: size, weight: .regular),
-      .foregroundColor: NSColor.labelColor,
-    ]
-    let text = NSMutableAttributedString()
-    for (index, metric) in HistoryMetric.allCases.enumerated() {
-      if index > 0 { text.append(NSAttributedString(string: Legend.separator, attributes: plain)) }
-      let entry = Legend.entry(metric, values.value(metric))
-      let label = metric.label
-      text.append(
-        NSAttributedString(
-          string: label,
-          attributes: [
-            .font: NSFont.boldSystemFont(ofSize: size),
-            .foregroundColor: GraphView.color(metric),
-          ]))
-      text.append(
-        NSAttributedString(string: String(entry.dropFirst(label.count)), attributes: plain))
+    let text = NSMutableAttributedString(
+      string: Legend.text(values),
+      attributes: [
+        .font: NSFont.monospacedDigitSystemFont(ofSize: size, weight: .regular),
+        .foregroundColor: NSColor.labelColor,
+      ])
+    var offset = 0
+    for metric in HistoryMetric.allCases {
+      let label = NSRange(location: offset, length: (metric.label as NSString).length)
+      text.addAttributes(
+        [.font: NSFont.boldSystemFont(ofSize: size), .foregroundColor: GraphView.color(metric)],
+        range: label)
+      let entry = Legend.entry(metric, values.value(metric)) + Legend.separator
+      offset += (entry as NSString).length
     }
     return text
   }
