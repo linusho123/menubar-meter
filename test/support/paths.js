@@ -12,4 +12,5 @@ module.exports = {
   testApp: path.join(root, 'build', 'test', 'Meter.app', 'Contents', 'MacOS', 'Meter'),
   meterAx: path.join(root, '.build', 'release', 'meter-ax'),
   neighbor: path.join(root, '.build', 'release', 'meter-neighbor'),
+  gpuLoad: path.join(root, '.build', 'release', 'meter-gpu-load'),
 };

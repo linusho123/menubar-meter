@@ -30,26 +30,19 @@ async function inMenuBar(pid) {
   throw new Error(`the meter's item never settled in the menu bar: ${JSON.stringify(menubar.itemsOf(pid))}`);
 }
 
-/**
- * Clicks the menu bar item (an Accessibility press, as an assistive app clicks it) and, once a
- * panel has dropped down, captures what the user sees at that moment: the panel's elements and
- * a screenshot of it. Returns the capture with the time it was taken.
- */
-async function clickAndCapture(pid) {
-  const item = await inMenuBar(pid);
-  execFileSync(paths.meterAx, ['press', String(pid)]);
-  const deadline = Date.now() + 3000;
-  let windows = [];
-  while (windows.length === 0 && Date.now() < deadline) {
-    await sleep(50);
-    windows = ax(['windows', String(pid)]);
-  }
-  if (windows.length === 0) throw new Error('no panel dropped down after the click');
-  // Let the panel finish drawing, then read it and photograph it at one moment.
-  await sleep(150);
-  windows = ax(['windows', String(pid)]);
+/** The meter's one panel, as Accessibility reads it now. */
+function panelWindow(pid) {
+  const windows = ax(['windows', String(pid)]);
   if (windows.length !== 1) throw new Error(`expected one panel, saw ${windows.length} windows`);
-  const [window] = windows;
+  return windows[0];
+}
+
+/**
+ * What the user sees in the open panel at one moment: its elements and a screenshot of it.
+ * Returns the capture with the time it was taken.
+ */
+function captureNow(pid, item = null) {
+  const window = panelWindow(pid);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'meter-shot-'));
   const file = path.join(dir, 'panel.png');
   const at = Date.now();
@@ -61,6 +54,31 @@ async function clickAndCapture(pid) {
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+}
+
+/** Clicks the menu bar item (an Accessibility press, as an assistive app clicks it). */
+async function click(pid) {
+  const item = await inMenuBar(pid);
+  execFileSync(paths.meterAx, ['press', String(pid)]);
+  const deadline = Date.now() + 3000;
+  let windows = [];
+  while (windows.length === 0 && Date.now() < deadline) {
+    await sleep(50);
+    windows = ax(['windows', String(pid)]);
+  }
+  if (windows.length === 0) throw new Error('no panel dropped down after the click');
+  return item;
+}
+
+/**
+ * Clicks the menu bar item and, once a panel has dropped down, captures what the user sees at
+ * that moment: the panel's elements and a screenshot of it.
+ */
+async function clickAndCapture(pid) {
+  const item = await click(pid);
+  // Let the panel finish drawing, then read it and photograph it at one moment.
+  await sleep(150);
+  return captureNow(pid, item);
 }
 
 // --- Colour ---
@@ -132,9 +150,12 @@ function theGraph(capture) {
   return found[0];
 }
 
-/** The legend: the text that names the three lines. */
+/** The legend: the one text that names the three lines and their values. */
 function legend(capture) {
-  const found = texts(capture).filter((e) => (e.words || []).some((w) => w.text === 'CPU'));
+  const found = texts(capture).filter((e) => {
+    const words = (e.words || []).map((w) => w.text);
+    return ['CPU', 'GPU', 'RAM'].every((label) => words.includes(label)) && words.length >= 6;
+  });
   if (found.length !== 1) throw new Error(`expected one legend naming CPU, found ${found.length}`);
   return found[0];
 }
@@ -202,6 +223,6 @@ function linePixels(capture) {
 }
 
 module.exports = {
-  clickAndCapture, textsReading, theGraph, graphs, legend, legendValue, legendHues, linePixels,
-  hueDistance, centreOf,
+  click, capture: captureNow, panelWindow, clickAndCapture, textsReading, theGraph, graphs, legend, legendValue,
+  legendHues, linePixels, hueDistance, centreOf, pixelsIn, isColoured, hueOf,
 };

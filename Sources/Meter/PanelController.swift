@@ -3,24 +3,38 @@ import MeterCore
 
 /// The panel that drops down from the menu bar item: the combined five-minute graph of CPU,
 /// GPU and RAM on a fixed axis, its scale and time labels, and the legend of current values
-/// (D50, D51, D52, D19). It shows no peak values (D9).
+/// (D50, D51, D52, D19); below them the heavy-tasks list (D10, D108), then `Open Activity
+/// Monitor…` (D59) and `Quit Meter`. It shows no peak values (D9).
 @MainActor
 final class PanelController {
   private static let width: CGFloat = 360
   private static let margin: CGFloat = 12
   private static let scaleWidth: CGFloat = 34
   private static let plotHeight: CGFloat = 120
+  private static let rowHeight: CGFloat = 20
 
   private let engine: MeterEngine
+  private let tasks: TaskSampler
+  private let clock: () -> Double
   private let panel: NSPanel
   private let graph: GraphView
   private let legend: NSTextField
+  private let list: TaskListView
   private var outsideClicks: Any?
 
-  init(engine: MeterEngine) {
+  /// The rows on show, and the row whose End button the pointer rests on (D100).
+  private var shownRows: [HeavyRow] = []
+  private var held: (id: TaskID, index: Int, tags: [RowTag])?
+
+  init(engine: MeterEngine, tasks: TaskSampler, clock: @escaping () -> Double) {
     self.engine = engine
+    self.tasks = tasks
+    self.clock = clock
     graph = GraphView()
     legend = NSTextField(labelWithString: "")
+    list = TaskListView(
+      width: Self.width - 2 * Self.margin, rowHeight: Self.rowHeight,
+      rows: HeavyTasks.cpuRows + 2)
 
     let font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
     func label(_ text: String, alignment: NSTextAlignment) -> NSTextField {
@@ -37,8 +51,13 @@ final class PanelController {
     let plotWidth = Self.width - plotX - margin
     let legendHeight: CGFloat = 18
     let timeHeight = ceil(font.boundingRectForFont.height)
-    let height = margin + legendHeight + 6 + timeHeight + 4 + Self.plotHeight + margin
-    let plotY = margin + legendHeight + 6 + timeHeight + 4
+    // From the bottom: Quit Meter, Open Activity Monitor…, the heavy-tasks list, the legend,
+    // the time axis, the graph.
+    let actionsHeight = 2 * Self.rowHeight + 2
+    let listY = margin + actionsHeight + 8
+    let legendY = listY + list.frame.height + 10
+    let plotY = legendY + legendHeight + 6 + timeHeight + 4
+    let height = plotY + Self.plotHeight + margin
 
     panel = NSPanel(
       contentRect: NSRect(x: 0, y: 0, width: Self.width, height: height),
@@ -76,9 +95,27 @@ final class PanelController {
     now.frame.origin = NSPoint(x: plotX + plotWidth - now.frame.width, y: timeY)
     content.addSubview(now)
 
-    legend.frame = NSRect(x: plotX, y: margin, width: plotWidth, height: legendHeight)
+    legend.frame = NSRect(x: plotX, y: legendY, width: plotWidth, height: legendHeight)
     legend.lineBreakMode = .byClipping
     content.addSubview(legend)
+
+    // The heavy-tasks list, below the graph (D10).
+    list.frame.origin = NSPoint(x: margin, y: listY)
+    content.addSubview(list)
+
+    // Its last rows: Open Activity Monitor… (D59), then Quit Meter at the bottom.
+    let openRow = ActionRow(title: "Open Activity Monitor\u{2026}")
+    openRow.frame = NSRect(
+      x: margin, y: margin + Self.rowHeight + 2, width: Self.width - 2 * margin,
+      height: Self.rowHeight)
+    content.addSubview(openRow)
+    let quitRow = ActionRow(title: "Quit Meter")
+    quitRow.frame = NSRect(
+      x: margin, y: margin, width: Self.width - 2 * margin, height: Self.rowHeight)
+    content.addSubview(quitRow)
+
+    openRow.target = self
+    openRow.action = #selector(openActivityMonitor(_:))
   }
 
   var isOpen: Bool { panel.isVisible }
@@ -102,6 +139,12 @@ final class PanelController {
       origin.x = max(origin.x, visible.minX + 4)
     }
     panel.setFrameOrigin(origin)
+    // The tasks are sampled only while the panel is open: the first snapshot now, the first
+    // measured list a moment later.
+    held = nil
+    tasks.reset()
+    tasks.sample(now: clock())
+    showList()
     refresh(now: nil)
     panel.orderFrontRegardless()
     // A click anywhere else closes the panel, as it would a menu.
@@ -115,15 +158,67 @@ final class PanelController {
     panel.orderOut(nil)
     if let outsideClicks { NSEvent.removeMonitor(outsideClicks) }
     outsideClicks = nil
+    held = nil
+    tasks.reset()
   }
 
-  /// Redraws the graph and the legend from the engine, when the panel is open. `now` is the
-  /// pass that just ran; nil means the engine's latest.
+  /// Redraws the graph and the legend from the engine, and re-ranks the heavy tasks, when the
+  /// panel is open. `now` is the pass that just ran; nil means the engine's latest.
   func refresh(now: Double?) {
     guard isOpen || now == nil else { return }
     let at = now ?? engine.now
     graph.show(engine.history, now: at)
     legend.attributedStringValue = Self.legendText(engine.legend(now: at))
+    guard isOpen, now != nil else { return }
+    followPointer()
+    if tasks.sample(now: clock()) { showList() }
+  }
+
+  /// Between passes: the first list after the panel opens shows as soon as it can be measured,
+  /// and a row whose End button the pointer has left is let go at once.
+  func tick() {
+    guard isOpen else { return }
+    followPointer()
+    if !tasks.hasList, tasks.sample(now: clock()) { showList() }
+  }
+
+  /// Holds the row whose End button the pointer rests on, and lets it go once the pointer has
+  /// left the button, re-ranking the list there and then (D100, D101).
+  private func followPointer() {
+    let resting = list.endButtonRow(under: NSEvent.mouseLocation)
+    if let resting, resting < shownRows.count {
+      if held?.index != resting {
+        held = (shownRows[resting].task.id, resting, shownRows[resting].tags)
+      }
+    } else if held != nil {
+      held = nil
+      showList()
+    }
+  }
+
+  /// The list as ranked now, holding the row whose End button the pointer rests on (D100).
+  private func showList() {
+    var rows = HeavyTasks.rank(tasks.tasks)
+    if let held {
+      if tasks.tasks.contains(where: { $0.id == held.id }) {
+        rows = HeavyTasks.holding(
+          held.id, at: held.index, tags: held.tags, in: rows, tasks: tasks.tasks)
+      } else {
+        self.held = nil
+      }
+    }
+    shownRows = rows
+    list.show(rows)
+  }
+
+  @objc private func openActivityMonitor(_ sender: Any?) {
+    guard
+      let url = NSWorkspace.shared.urlForApplication(
+        withBundleIdentifier: "com.apple.ActivityMonitor")
+    else { return }
+    let configuration = NSWorkspace.OpenConfiguration()
+    configuration.activates = true
+    NSWorkspace.shared.openApplication(at: url, configuration: configuration)
   }
 
   /// The legend's text (D19), each line's label in that line's colour.

@@ -10,6 +10,14 @@ import ApplicationServices
 //   meter-ax press <pid>         press the app's status item, as a click on it does
 //   meter-ax windows <pid>       the app's windows and every element in them, as JSON: role,
 //                                text, frame, and for text the frame of each word
+//   meter-ax press-button <pid> <title>
+//                                press the button titled <title> in the app's windows
+//   meter-ax move <x> <y>        move the pointer to a point on screen, as the mouse moves it
+//   meter-ax pointer             where the pointer is, as JSON
+//   meter-ax front               the app in front, as JSON
+//   meter-ax cell <pid> <key column> <key> <column>
+//                                in the app's table, the text under <column> in the row whose
+//                                <key column> reads <key>, as another app's table shows it
 
 struct Item: Encodable {
   var pid: Int32
@@ -161,6 +169,55 @@ func windows(pid: Int32) -> [Window] {
   }
 }
 
+/// The text a table cell shows: its own value, or its first text's.
+func cellText(_ cell: AXUIElement) -> String {
+  if let value = attribute(cell, kAXValueAttribute) as? String { return value }
+  for child in attribute(cell, kAXChildrenAttribute) as? [AXUIElement] ?? [] {
+    if attribute(child, kAXRoleAttribute) as? String == kAXStaticTextRole {
+      return (attribute(child, kAXValueAttribute) as? String ?? title(child))
+        .trimmingCharacters(in: .whitespaces)
+    }
+  }
+  return ""
+}
+
+/// The first table or outline in an element, without walking into one's rows.
+func findTable(_ element: AXUIElement) -> AXUIElement? {
+  let role = attribute(element, kAXRoleAttribute) as? String
+  if role == kAXOutlineRole || role == kAXTableRole { return element }
+  for child in attribute(element, kAXChildrenAttribute) as? [AXUIElement] ?? [] {
+    if let found = findTable(child) { return found }
+  }
+  return nil
+}
+
+/// The text under `column` in the row whose `keyColumn` reads `key`, nil when no row does.
+func tableCell(pid: Int32, keyColumn: String, key: String, column: String) -> String? {
+  let app = AXUIElementCreateApplication(pid)
+  for window in attribute(app, kAXWindowsAttribute) as? [AXUIElement] ?? [] {
+    guard let table = findTable(window),
+      let header = attribute(table, kAXHeaderAttribute),
+      let titles = attribute(header as! AXUIElement, kAXChildrenAttribute) as? [AXUIElement],
+      let columns = attribute(table, kAXColumnsAttribute) as? [AXUIElement],
+      let rows = attribute(table, kAXRowsAttribute) as? [AXUIElement]
+    else { continue }
+    // A column's place among the cells, found by its heading's place on screen.
+    func index(_ name: String) -> Int? {
+      guard let heading = titles.first(where: { title($0) == name }), let x = point(heading)?.x
+      else { return nil }
+      return columns.firstIndex { point($0)?.x == x }
+    }
+    guard let keyIndex = index(keyColumn), let valueIndex = index(column) else { continue }
+    for row in rows {
+      guard let cells = attribute(row, kAXChildrenAttribute) as? [AXUIElement],
+        cells.count > max(keyIndex, valueIndex), cellText(cells[keyIndex]) == key
+      else { continue }
+      return cellText(cells[valueIndex])
+    }
+  }
+  return nil
+}
+
 func emit<T: Encodable>(_ value: T) {
   let encoder = JSONEncoder()
   encoder.outputFormatting = [.sortedKeys]
@@ -213,6 +270,73 @@ case "press":
 case "windows":
   guard arguments.count == 3, let pid = Int32(arguments[2]) else { fail("usage: windows <pid>") }
   emit(windows(pid: pid))
+case "press-button":
+  guard arguments.count == 4, let pid = Int32(arguments[2]) else {
+    fail("usage: press-button <pid> <title>")
+  }
+  let wanted = arguments[3]
+  var found: [AXUIElement] = []
+  func search(_ element: AXUIElement) {
+    if attribute(element, kAXRoleAttribute) as? String == kAXButtonRole,
+      title(element) == wanted
+    {
+      found.append(element)
+    }
+    for child in attribute(element, kAXChildrenAttribute) as? [AXUIElement] ?? [] {
+      search(child)
+    }
+  }
+  let app = AXUIElementCreateApplication(pid)
+  for window in attribute(app, kAXWindowsAttribute) as? [AXUIElement] ?? [] { search(window) }
+  guard found.count == 1 else { fail("press-button: \(found.count) buttons titled \(wanted)") }
+  let result = AXUIElementPerformAction(found[0], kAXPressAction as CFString)
+  guard result == .success else { fail("press-button: AXPress failed (\(result.rawValue))") }
+case "move":
+  guard arguments.count == 4, let x = Double(arguments[2]), let y = Double(arguments[3]) else {
+    fail("usage: move <x> <y>")
+  }
+  // The pointer goes there, and the move is posted as the mouse posts one, until macOS reports
+  // the pointer there.
+  let target = CGPoint(x: x, y: y)
+  for _ in 0..<20 {
+    CGWarpMouseCursorPosition(target)
+    CGEvent(
+      mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: target,
+      mouseButton: .left)?.post(tap: .cghidEventTap)
+    usleep(50000)
+    if let now = CGEvent(source: nil)?.location, abs(now.x - x) < 1, abs(now.y - y) < 1 {
+      exit(0)
+    }
+  }
+  fail("move: the pointer did not move to \(x), \(y)")
+case "pointer":
+  struct Pointer: Encodable {
+    var x: Double
+    var y: Double
+  }
+  guard let location = CGEvent(source: nil)?.location else { fail("pointer: no event") }
+  emit(Pointer(x: location.x, y: location.y))
+case "cell":
+  guard arguments.count == 6, let pid = Int32(arguments[2]) else {
+    fail("usage: cell <pid> <key column> <key> <column>")
+  }
+  guard
+    let text = tableCell(pid: pid, keyColumn: arguments[3], key: arguments[4], column: arguments[5])
+  else { fail("cell: no row whose \(arguments[3]) reads \(arguments[4])") }
+  print(text)
+case "front":
+  struct Front: Encodable {
+    var pid: Int32
+    var name: String
+    var bundle: String
+  }
+  guard let app = NSWorkspace.shared.frontmostApplication else { fail("front: no app") }
+  emit(
+    Front(
+      pid: app.processIdentifier, name: app.localizedName ?? "",
+      bundle: app.bundleIdentifier ?? ""))
 default:
-  fail("usage: meter-ax item <pid> | items | watch <pid> <ms> | press <pid> | windows <pid>")
+  fail(
+    "usage: meter-ax item <pid> | items | watch <pid> <ms> | press <pid> | windows <pid>"
+      + " | press-button <pid> <title> | move <x> <y> | pointer | front")
 }

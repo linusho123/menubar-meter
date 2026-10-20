@@ -8,6 +8,7 @@ let package = Package(
     .executable(name: "Meter", targets: ["Meter"]),
     .executable(name: "meter-ax", targets: ["meter-ax"]),
     .executable(name: "meter-neighbor", targets: ["meter-neighbor"]),
+    .executable(name: "meter-gpu-load", targets: ["meter-gpu-load"]),
   ],
   targets: [
     // Sampling arithmetic, formatting and staleness. No AppKit, no system calls.
@@ -18,6 +19,7 @@ let package = Package(
     // Test harness helpers, never bundled into the app.
     .executableTarget(name: "meter-ax"),
     .executableTarget(name: "meter-neighbor"),
+    .executableTarget(name: "meter-gpu-load"),
     .testTarget(name: "MeterCoreTests", dependencies: ["MeterCore"]),
   ]
 )
