@@ -56,6 +56,7 @@ async function running(w) {
   const values = feeds.readings({ cpu: 40, gpu: 10, ram: 40, temp: 50 });
   values.tasks = taskFeed(w);
   if (w.cores) values.cores = w.cores;
+  if (w.gpuBusy !== undefined) values.gpuBusy = w.gpuBusy;
   return meter.launchWithFeed(w, values);
 }
 
@@ -214,7 +215,15 @@ module.exports = (reg) => {
   // --- A task's GPU (D49) ---
 
   reg.define(/^Activity Monitor's "% GPU" column reads "([\d.]+)" for (\w+)$/, (w, gpu, name) => {
-    setTask(w, name, { gpu: Number(gpu) });
+    // Activity Monitor's figure is the task's part of all GPU clients' time, of the GPU's busy
+    // figure (D49): the GPU is 30% busy, its clients together keep it 50% of the time, and the
+    // task's part of that is `gpu / 30`. The task's own time (20.5%) is not the figure.
+    const busy = 30;
+    const clients = 50;
+    const own = (Number(gpu) / busy) * clients;
+    w.gpuBusy = busy;
+    setTask(w, name, { gpu: own });
+    setTask(w, 'WindowServer', { cpu: 0.1, gpu: clients - own - 0.4, uid: 88 });
   });
 
   reg.define(/^(\w+) is in the heavy-tasks list$/, (w, name) => {
