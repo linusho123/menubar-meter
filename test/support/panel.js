@@ -13,13 +13,26 @@ const { sleep } = require('./procs');
 
 const ax = (args) => JSON.parse(execFileSync(paths.meterAx, args, { encoding: 'utf8' }));
 
+/** The top edge of each display, in the Accessibility API's screen points. */
+function screenTops() {
+  const script = 'ObjC.import("AppKit"); const s = $.NSScreen.screens; const h = s.objectAtIndex(0).frame.size.height;'
+    + ' const tops = []; for (let i = 0; i < s.count; i++) { const f = s.objectAtIndex(i).frame;'
+    + ' tops.push({ x: f.origin.x, y: h - (f.origin.y + f.size.height), width: f.size.width }); } JSON.stringify(tops)';
+  return JSON.parse(execFileSync('osascript', ['-l', 'JavaScript', '-e', script], { encoding: 'utf8' }));
+}
+
 /**
- * The meter's item once it sits still in the menu bar, where the user can click it: a newly
- * launched status item is placed a moment after it is made.
+ * The meter's item once it sits still in a menu bar, where the user can click it: a newly
+ * launched status item is placed a moment after it is made. With more than one display, the
+ * item shows in the menu bar of the display in use, at the top of that display.
  */
 async function inMenuBar(pid) {
-  const shown = (i) => i && i.width > 0 && i.height > 0 && i.x >= 0 && i.y >= -2 && i.y <= 40;
-  const deadline = Date.now() + 5000;
+  const tops = screenTops();
+  const shown = (i) => i && i.width > 0 && i.height > 0 && tops.some((t) => i.x >= t.x
+    && i.x + i.width <= t.x + t.width && i.y >= t.y - 2 && i.y <= t.y + 40);
+  // macOS hides status items while a full-screen app holds the display in use: wait a while
+  // for the item to show again rather than click one the user cannot see.
+  const deadline = Date.now() + 30000;
   let last = null;
   while (Date.now() < deadline) {
     const [item] = menubar.itemsOf(pid);
@@ -27,7 +40,7 @@ async function inMenuBar(pid) {
     last = shown(item) ? item : null;
     await sleep(100);
   }
-  throw new Error(`the meter's item never settled in the menu bar: ${JSON.stringify(menubar.itemsOf(pid))}`);
+  throw new Error(`the meter's item never settled in a menu bar: ${JSON.stringify(menubar.itemsOf(pid))}; displays ${JSON.stringify(tops)}`);
 }
 
 /** The meter's one panel, as Accessibility reads it now. */
