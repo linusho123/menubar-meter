@@ -9,6 +9,7 @@ let package = Package(
     .executable(name: "meter-ax", targets: ["meter-ax"]),
     .executable(name: "meter-neighbor", targets: ["meter-neighbor"]),
     .executable(name: "meter-gpu-load", targets: ["meter-gpu-load"]),
+    .executable(name: "meter-standin", targets: ["meter-standin"]),
   ],
   targets: [
     // Sampling arithmetic, formatting and staleness. No AppKit, no system calls.
@@ -20,6 +21,7 @@ let package = Package(
     .executableTarget(name: "meter-ax"),
     .executableTarget(name: "meter-neighbor"),
     .executableTarget(name: "meter-gpu-load"),
+    .executableTarget(name: "meter-standin"),
     .testTarget(name: "MeterCoreTests", dependencies: ["MeterCore"]),
   ]
 )

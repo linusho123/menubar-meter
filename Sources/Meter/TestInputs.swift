@@ -18,7 +18,10 @@
   ///            "name", "uid", "path" (or null), "busyCores": CPU cores it keeps busy,
   ///            "gpuShare": the share of GPU time it takes (0 to 1), "memory": bytes}; its CPU
   ///            and GPU time grow at those rates on the meter's clock from the moment it first
-  ///            appears, so each refresh measures them back exactly
+  ///            appears, so each refresh measures them back exactly. A task with "real": true
+  ///            is a process the harness runs: its start time, owner, program and name are the
+  ///            real system's for that process id, and it is listed only while that process
+  ///            runs, so it leaves the list when the process ends; only its rates come from here
   ///   gpuBusy: optional, the percent the GPU is busy over the fed tasks' refreshes (its Device
   ///            Utilization %); as busy as the fed tasks' shares add up to when absent
   ///   past:    optional, the time the meter has already run through before this launch, as
@@ -66,6 +69,7 @@
 
     private struct Task: Decodable {
       var pid: Int32
+      var real: Bool?
       var started: UInt64?
       var name: String
       var uid: UInt32
@@ -118,8 +122,22 @@
       let clock = now()
       var times: [TaskID: (cpu: Double, gpu: Double, at: Double)] = [:]
       var gpuTimes: [Int32: UInt64] = [:]
-      let samples = tasks.map { task in
-        let id = TaskID(pid: task.pid, started: task.started ?? 1)
+      let appNames = RealTasks.appNames()
+      let samples: [ProcessSample] = tasks.compactMap { task in
+        var id = TaskID(pid: task.pid, started: task.started ?? 1)
+        var (name, uid, path) = (task.name, task.uid, task.path)
+        if task.real == true {
+          // The harness's own process, as the real system knows it, while it runs.
+          guard let found = RealTasks.identity(task.pid) else { return nil }
+          path = RealTasks.path(task.pid)
+          guard let again = RealTasks.identity(task.pid), again.started == found.started else {
+            return nil
+          }
+          id = TaskID(pid: task.pid, started: found.started)
+          uid = found.uid
+          name = RealTasks.name(
+            pid: task.pid, path: path, command: found.command, apps: appNames)
+        }
         var time = taskTimes[id] ?? (cpu: 0, gpu: 0, at: clock)
         let seconds = max(0, clock - time.at)
         time.cpu += task.busyCores * seconds * 1_000_000_000
@@ -128,7 +146,7 @@
         times[id] = time
         gpuTimes[task.pid, default: 0] += UInt64(time.gpu.rounded())
         return ProcessSample(
-          id: id, name: task.name, uid: task.uid, path: task.path,
+          id: id, name: name, uid: uid, path: path,
           cpuTime: UInt64(time.cpu.rounded()), memory: task.memory)
       }
       taskTimes = times

@@ -7,7 +7,7 @@ import MeterCore
 /// Monitor…` (D59) and `Quit Meter`. It shows no peak values (D9).
 @MainActor
 final class PanelController {
-  private static let width: CGFloat = 360
+  private static let width: CGFloat = 384
   private static let margin: CGFloat = 12
   private static let scaleWidth: CGFloat = 34
   private static let plotHeight: CGFloat = 120
@@ -15,6 +15,7 @@ final class PanelController {
 
   private let engine: MeterEngine
   private let tasks: TaskSampler
+  private let ender: TaskEnder
   private let clock: () -> Double
   private let panel: NSPanel
   private let graph: GraphView
@@ -26,9 +27,12 @@ final class PanelController {
   private var shownRows: [HeavyRow] = []
   private var held: (id: TaskID, index: Int)?
 
-  init(engine: MeterEngine, tasks: TaskSampler, clock: @escaping () -> Double) {
+  init(
+    engine: MeterEngine, tasks: TaskSampler, ender: TaskEnder, clock: @escaping () -> Double
+  ) {
     self.engine = engine
     self.tasks = tasks
+    self.ender = ender
     self.clock = clock
     graph = GraphView()
     legend = NSTextField(labelWithString: "")
@@ -116,6 +120,11 @@ final class PanelController {
 
     openRow.target = self
     openRow.action = #selector(openActivityMonitor(_:))
+
+    // End, Ending… and Force Quit act on the task the row shows, never on a row (D60, D105).
+    list.onEnd = { [weak self] task in
+      MainActor.assumeIsolated { self?.end(task) }
+    }
   }
 
   var isOpen: Bool { panel.isVisible }
@@ -172,6 +181,7 @@ final class PanelController {
     guard isOpen, now != nil else { return }
     followPointer()
     if tasks.sample(now: clock()) { showList() }
+    showButtons()
   }
 
   /// Between passes: the first list after the panel opens shows as soon as it can be measured,
@@ -180,6 +190,7 @@ final class PanelController {
     guard isOpen else { return }
     followPointer()
     if !tasks.hasList, tasks.sample(now: clock()) { showList() }
+    showButtons()
   }
 
   /// Holds the row whose End button the pointer rests on, and lets it go once the pointer has
@@ -207,8 +218,26 @@ final class PanelController {
         self.held = nil
       }
     }
+    // A task that has gone takes its ending state with it (D40); until a list is measured (the
+    // panel just opened) nothing is known to have gone.
+    if tasks.hasList { ender.keep(only: Set(tasks.tasks.map(\.id))) }
     shownRows = rows
-    list.show(rows)
+    let now = clock()
+    list.show(rows) { ender.button(for: $0, now: now) }
+  }
+
+  /// Every End button as its task's ending state reads now: `Ending…` turns into `Force Quit`
+  /// five seconds after the click (D62).
+  private func showButtons() {
+    let now = clock()
+    list.showButtons { ender.button(for: $0, now: now) }
+  }
+
+  /// The user clicked the End, or Force Quit, button of the row showing `task`. No
+  /// confirmation is asked (D60).
+  private func end(_ task: TaskID) {
+    ender.click(task, now: clock())
+    showButtons()
   }
 
   @objc private func openActivityMonitor(_ sender: Any?) {

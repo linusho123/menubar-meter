@@ -13,6 +13,7 @@ import ApplicationServices
 //   meter-ax press-button <pid> <title>
 //                                press the button titled <title> in the app's windows
 //   meter-ax move <x> <y>        move the pointer to a point on screen, as the mouse moves it
+//   meter-ax click <x> <y>       click the left button at a point on screen, as the mouse does
 //   meter-ax pointer             where the pointer is, as JSON
 //   meter-ax front               the app in front, as JSON
 //   meter-ax cell <pid> <key column> <key> <column>
@@ -87,6 +88,8 @@ struct Element: Encodable {
   var height: Double
   /// For text: each word with its frame on screen, from the text's own bounds-for-range.
   var words: [Word]?
+  /// For a button: whether it can be clicked now.
+  var enabled: Bool?
 }
 
 struct Word: Encodable {
@@ -146,6 +149,9 @@ func describe(_ element: AXUIElement, into list: inout [Element]) {
     x: origin.x, y: origin.y, width: extent.width, height: extent.height)
   if role == kAXStaticTextRole, !text.isEmpty {
     entry.words = words(of: element, text: text)
+  }
+  if role == kAXButtonRole {
+    entry.enabled = attribute(element, kAXEnabledAttribute) as? Bool
   }
   list.append(entry)
   for child in attribute(element, kAXChildrenAttribute) as? [AXUIElement] ?? [] {
@@ -309,6 +315,23 @@ case "move":
     }
   }
   fail("move: the pointer did not move to \(x), \(y)")
+case "click":
+  guard arguments.count == 4, let x = Double(arguments[2]), let y = Double(arguments[3]) else {
+    fail("usage: click <x> <y>")
+  }
+  // The pointer is already there (the harness rests it there first, as a user does), so the
+  // button is pressed and let go where it is.
+  let target = CGPoint(x: x, y: y)
+  guard let now = CGEvent(source: nil)?.location, abs(now.x - x) < 1, abs(now.y - y) < 1 else {
+    fail("click: the pointer is not at \(x), \(y)")
+  }
+  for type in [CGEventType.leftMouseDown, .leftMouseUp] {
+    let event = CGEvent(
+      mouseEventSource: nil, mouseType: type, mouseCursorPosition: target, mouseButton: .left)
+    event?.setIntegerValueField(.mouseEventClickState, value: 1)
+    event?.post(tap: .cghidEventTap)
+    usleep(60000)
+  }
 case "pointer":
   struct Pointer: Encodable {
     var x: Double
@@ -338,6 +361,7 @@ case "front":
 default:
   fail(
     "usage: meter-ax item <pid> | items | watch <pid> <ms> | press <pid> | windows <pid>"
-      + " | press-button <pid> <title> | move <x> <y> | pointer | cell <pid> <key column> <key> <column>"
+      + " | press-button <pid> <title> | move <x> <y> | click <x> <y> | pointer"
+      + " | cell <pid> <key column> <key> <column>"
       + " | front")
 }

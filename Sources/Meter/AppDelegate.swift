@@ -14,7 +14,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let engine = MeterEngine(inputs: inputs)
     // The task sampler reads the same source as the sampler: the real tasks, or the fed ones.
     let tasks = TaskSampler(inputs: (inputs as? TaskInputs) ?? RealInputs())
-    let panel = PanelController(engine: engine, tasks: tasks) { [weak self] in
+    // The ender always acts on the real system, the test build too: it sends only to a task
+    // the system itself shows is still the one its row showed.
+    let ender = TaskEnder(signals: RealSignals())
+    let panel = PanelController(engine: engine, tasks: tasks, ender: ender) { [weak self] in
       self?.clock() ?? Clock.now()
     }
     let statusItem = StatusItemController { [weak self] button in
