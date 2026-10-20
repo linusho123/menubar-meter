@@ -130,3 +130,13 @@ test('a real task\'s GPU in the list agrees with Activity Monitor\'s % GPU', asy
     }
   }
 });
+
+test('meter-ax\'s usage line names every command it has', () => {
+  const source = require('node:fs').readFileSync(path.join(paths.root, 'Sources', 'meter-ax', 'main.swift'), 'utf8');
+  const commands = [...source.matchAll(/^case "([\w-]+)":/gm)].map((m) => m[1]);
+  assert.ok(commands.includes('cell'), 'the source has the cell command');
+  const { spawnSync } = require('node:child_process');
+  const r = spawnSync(paths.meterAx, [], { encoding: 'utf8' });
+  const usage = `${r.stdout}${r.stderr}`;
+  for (const command of commands) assert.ok(usage.includes(command), `usage names "${command}": ${usage.trim()}`);
+});

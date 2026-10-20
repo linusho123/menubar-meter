@@ -338,5 +338,6 @@ case "front":
 default:
   fail(
     "usage: meter-ax item <pid> | items | watch <pid> <ms> | press <pid> | windows <pid>"
-      + " | press-button <pid> <title> | move <x> <y> | pointer | front")
+      + " | press-button <pid> <title> | move <x> <y> | pointer | cell <pid> <key column> <key> <column>"
+      + " | front")
 }
