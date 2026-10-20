@@ -6,31 +6,31 @@
 {"file":"features/ending-tasks.feature","title":"Force Quit appears only for a task still running after five seconds [2]","status":"unbound"}
 {"file":"features/ending-tasks.feature","title":"Force Quit ends the task outright","status":"unbound"}
 {"file":"features/ending-tasks.feature","title":"The ending state follows its task when rows move","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"A long-running hog is never nudged or ended by the app","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"A macOS or other-user task is listed as system with no End [1]","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"A macOS or other-user task is listed as system with no End [2]","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"A macOS or other-user task is listed as system with no End [3]","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"A macOS or other-user task is listed as system with no End [4]","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"A task's CPU is its share of the whole Mac [1]","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"A task's CPU is its share of the whole Mac [2]","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"A task's CPU is its share of the whole Mac [3]","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"A task's GPU value is Activity Monitor's % GPU for it","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"A task's RAM is its share of the Mac's memory [1]","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"A task's RAM is its share of the Mac's memory [2]","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"A task's RAM is its share of the Mac's memory [3]","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"A tie is broken alphabetically","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"An extra row appears only for a real GPU or RAM hog [1]","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"An extra row appears only for a real GPU or RAM hog [2]","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"An extra row appears only for a real GPU or RAM hog [3]","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"An extra row appears only for a real GPU or RAM hog [4]","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"Open Activity Monitor from the panel","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"The meter counts against the Mac it runs on [1]","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"The meter counts against the Mac it runs on [2]","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"The meter counts against the Mac it runs on [3]","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"The meter in its own list has no End button","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"The row under the pointer holds while it rests on End","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"The top five by CPU, then the biggest GPU and RAM hogs","status":"unbound"}
-{"file":"features/heavy-tasks.feature","title":"The user's own tasks outside /System keep their End button","status":"unbound"}
+{"file":"features/heavy-tasks.feature","title":"A long-running hog is never nudged or ended by the app","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"A macOS or other-user task is listed as system with no End [1]","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"A macOS or other-user task is listed as system with no End [2]","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"A macOS or other-user task is listed as system with no End [3]","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"A macOS or other-user task is listed as system with no End [4]","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"A task's CPU is its share of the whole Mac [1]","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"A task's CPU is its share of the whole Mac [2]","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"A task's CPU is its share of the whole Mac [3]","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"A task's GPU value is Activity Monitor's % GPU for it","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"A task's RAM is its share of the Mac's memory [1]","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"A task's RAM is its share of the Mac's memory [2]","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"A task's RAM is its share of the Mac's memory [3]","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"A tie is broken alphabetically","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"An extra row appears only for a real GPU or RAM hog [1]","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"An extra row appears only for a real GPU or RAM hog [2]","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"An extra row appears only for a real GPU or RAM hog [3]","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"An extra row appears only for a real GPU or RAM hog [4]","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"Open Activity Monitor from the panel","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"The meter counts against the Mac it runs on [1]","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"The meter counts against the Mac it runs on [2]","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"The meter counts against the Mac it runs on [3]","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"The meter in its own list has no End button","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"The row under the pointer holds while it rests on End","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"The top five by CPU, then the biggest GPU and RAM hogs","status":"passed"}
+{"file":"features/heavy-tasks.feature","title":"The user's own tasks outside /System keep their End button","status":"passed"}
 {"file":"features/menu-bar-readout.feature","title":"A value with no fresh reading turns into a dash [1]","status":"passed"}
 {"file":"features/menu-bar-readout.feature","title":"A value with no fresh reading turns into a dash [2]","status":"passed"}
 {"file":"features/menu-bar-readout.feature","title":"A value with no fresh reading turns into a dash [3]","status":"passed"}

@@ -12,7 +12,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   func applicationDidFinishLaunching(_ notification: Notification) {
     let inputs = makeInputs()
     let engine = MeterEngine(inputs: inputs)
-    let panel = PanelController(engine: engine)
+    // The task sampler reads the same source as the sampler: the real tasks, or the fed ones.
+    let tasks = TaskSampler(inputs: (inputs as? TaskInputs) ?? RealInputs())
+    let panel = PanelController(engine: engine, tasks: tasks) { [weak self] in
+      self?.clock() ?? Clock.now()
+    }
     let statusItem = StatusItemController { [weak self] button in
       self?.panel?.toggle(below: button)
     }
@@ -49,6 +53,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     if let readout = engine.tick(now: now) {
       statusItem.show(readout)
       panel?.refresh(now: now)
+    } else {
+      panel?.tick()
     }
   }
 

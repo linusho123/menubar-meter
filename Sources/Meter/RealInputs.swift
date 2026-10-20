@@ -7,6 +7,7 @@ import MeterCore
 final class RealInputs: MeterInputs {
   let physicalMemory: UInt64
   let pageSize: UInt64
+  let cpuCores: Int
   private let thermal = ThermalSensors()
 
   init() {
@@ -18,6 +19,10 @@ final class RealInputs: MeterInputs {
     length = MemoryLayout<Int>.size
     sysctlbyname("hw.pagesize", &pagesize, &length, nil, 0)
     pageSize = UInt64(pagesize)
+    var ncpu: Int32 = 0
+    length = MemoryLayout<Int32>.size
+    sysctlbyname("hw.ncpu", &ncpu, &length, nil, 0)
+    cpuCores = Int(ncpu)
   }
 
   func cpuTicks() -> CPUTicks? {

@@ -13,6 +13,14 @@
   ///   memory:  {"anonymous", "purgeable", "wired", "compressed", "fileBacked"} page counts
   ///   gpu:     the accelerator's performance statistics, e.g. {"Device Utilization %": 4}
   ///   sensors: temperature sensor readings by name, e.g. {"PMU tdie1": 45.0}
+  ///   cores:   optional, the Mac's CPU core count in place of `hw.ncpu`
+  ///   tasks:   optional, the running tasks in place of the real ones, each {"pid", "started",
+  ///            "name", "uid", "path" (or null), "busyCores": CPU cores it keeps busy,
+  ///            "gpuShare": the share of GPU time it takes (0 to 1), "memory": bytes}; its CPU
+  ///            and GPU time grow at those rates on the meter's clock from the moment it first
+  ///            appears, so each refresh measures them back exactly
+  ///   gpuBusy: optional, the percent the GPU is busy over the fed tasks' refreshes (its Device
+  ///            Utilization %); as busy as the fed tasks' shares add up to when absent
   ///   past:    optional, the time the meter has already run through before this launch, as
   ///            consecutive stretches ending now, each {"seconds": n} with the cpu (no
   ///            `since`), memory, gpu and sensors in effect over it, or {"seconds": n,
@@ -22,7 +30,7 @@
   /// CPU counters every quarter second of it and a pass every half second, and for a sleep the
   /// system's own sleep and wake notifications, posted where macOS posts them. The clock this
   /// source gives the meter is the real one, except while that past runs.
-  final class TestInputs: MeterInputs {
+  final class TestInputs: MeterInputs, TaskInputs {
     static let feedVariable = "METER_TEST_FEED"
 
     private struct Feed: Decodable {
@@ -51,7 +59,24 @@
       var gpu: [String: Int]?
       var sensors: [String: Double]?
       var past: [Stretch]?
+      var cores: Int?
+      var tasks: [Task]?
+      var gpuBusy: Double?
     }
+
+    private struct Task: Decodable {
+      var pid: Int32
+      var started: UInt64?
+      var name: String
+      var uid: UInt32
+      var path: String?
+      var busyCores: Double
+      var gpuShare: Double
+      var memory: UInt64
+    }
+
+    /// Each fed task's CPU and GPU time so far, in nanoseconds, and when they were last grown.
+    private var taskTimes: [TaskID: (cpu: Double, gpu: Double, at: Double)] = [:]
 
     private let feedPath: String
     private let real: RealInputs
@@ -74,6 +99,46 @@
 
     var physicalMemory: UInt64 { real.physicalMemory }
     var pageSize: UInt64 { real.pageSize }
+    var cpuCores: Int { feed?.cores ?? real.cpuCores }
+    var userID: UInt32 { real.userID }
+    var ownPID: Int32 { real.ownPID }
+
+    func resolve(path: String) -> String? {
+      real.resolve(path: path)
+    }
+
+    /// The fed tasks, their times grown at their rates since the last read; the real tasks when
+    /// the feed names none.
+    func snapshot() -> TaskSnapshot? {
+      reload()
+      guard let tasks = feed?.tasks else {
+        taskTimes = [:]
+        return real.snapshot()
+      }
+      let clock = now()
+      var times: [TaskID: (cpu: Double, gpu: Double, at: Double)] = [:]
+      var gpuTimes: [Int32: UInt64] = [:]
+      let samples = tasks.map { task in
+        let id = TaskID(pid: task.pid, started: task.started ?? 1)
+        var time = taskTimes[id] ?? (cpu: 0, gpu: 0, at: clock)
+        let seconds = max(0, clock - time.at)
+        time.cpu += task.busyCores * seconds * 1_000_000_000
+        time.gpu += task.gpuShare * seconds * 1_000_000_000
+        time.at = clock
+        times[id] = time
+        gpuTimes[task.pid, default: 0] += UInt64(time.gpu.rounded())
+        return ProcessSample(
+          id: id, name: task.name, uid: task.uid, path: task.path,
+          cpuTime: UInt64(time.cpu.rounded()), memory: task.memory)
+      }
+      taskTimes = times
+      // The fed GPU is as busy as the feed says, else exactly as busy as its fed tasks keep it.
+      let kept = tasks.reduce(0) { $0 + max(0, $1.gpuShare) }
+      let busy = min(1, feed?.gpuBusy.map { $0 / 100 } ?? kept)
+      return TaskSnapshot(
+        processes: samples, gpuTimes: gpuTimes,
+        gpuBusy: Share(part: UInt64((busy * 1_000_000).rounded()), whole: 1_000_000))
+    }
 
     /// The meter's clock: the real one, or the past's while it runs.
     func now() -> Double {
@@ -170,7 +235,8 @@
         var cpu = stretch.cpu
         cpu?.since = pastNow?.milliseconds
         feed = Feed(
-          cpu: cpu, memory: stretch.memory, gpu: stretch.gpu, sensors: stretch.sensors, past: nil)
+          cpu: cpu, memory: stretch.memory, gpu: stretch.gpu, sensors: stretch.sensors, past: nil,
+          cores: live.cores, tasks: live.tasks)
         while offset + Sampler.cpuInterval <= end + 1e-9 {
           offset += Sampler.cpuInterval
           setClock(offset)
