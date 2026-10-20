@@ -5,6 +5,7 @@
 // they never stand in for a scenario.
 const test = require('node:test');
 const assert = require('node:assert');
+const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const paths = require('./support/paths');
@@ -60,15 +61,41 @@ test('a real task\'s CPU and RAM in the list agree with ps and top', async () =>
       const last = seen[seen.length - 1];
       assert.deepStrictEqual(last.buttons.map((b) => b.text), ['End'], 'the user\'s own node has End');
       assert.deepStrictEqual(last.tags, []);
-      // macOS's own tasks and the meter, wherever they are listed, are system.
-      for (const row of tasks.listNow(meter.pid).rows) {
-        if (['Meter', 'WindowServer', 'loginwindow', 'Dock', 'kernel_task'].includes(row.name)) {
-          assert.ok(row.tags.includes('system') && row.buttons.length === 0, `${row.name} is system`);
+    });
+  } finally {
+    await procs.end(load);
+  }
+});
+
+const jsc = '/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc';
+
+test('a real task whose program lives in /System is system, with no End (D99)', async () => {
+  // A program macOS ships, run by the user for one busy core: it ranks in the top five.
+  const busy = procs.start(jsc, ['-e', 'for(;;){}']);
+  try {
+    await procs.sleep(2000);
+    const [owner, program] = run('ps', ['-o', 'user=,comm=', '-p', String(busy.pid)]).split(/\s+/, 2);
+    assert.strictEqual(owner, os.userInfo().username, 'ps: the task runs as the user');
+    assert.ok(program.startsWith('/System/'), `ps: its program is ${program}`);
+    await withRealMeter(async (meter) => {
+      await tasks.openAndRead(meter.pid, 5);
+      let row;
+      for (let i = 0; i < 10 && !row; i++) {
+        await procs.sleep(600);
+        row = tasks.rowsNamed(tasks.listNow(meter.pid), 'jsc')[0];
+      }
+      assert.ok(row, 'the busy /System task is listed');
+      assert.ok(row.tags.includes('system'), `its tags: ${row.tags}`);
+      assert.deepStrictEqual(row.buttons.map((b) => b.text), [], 'it has no End');
+      // The meter and macOS's own tasks, wherever they are listed, are system too.
+      for (const other of tasks.listNow(meter.pid).rows) {
+        if (['Meter', 'WindowServer', 'loginwindow', 'Dock', 'kernel_task'].includes(other.name)) {
+          assert.ok(other.tags.includes('system') && other.buttons.length === 0, `${other.name} is system`);
         }
       }
     });
   } finally {
-    await procs.end(load);
+    await procs.end(busy);
   }
 });
 
