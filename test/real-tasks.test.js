@@ -16,7 +16,6 @@ const tasks = require('./support/tasks');
 const run = (file, args) => execFileSync(file, args, { encoding: 'utf8' }).trim();
 const value = (text) => Number.parseFloat(text);
 const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
-const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
 
 async function withRealMeter(body) {
   const meter = procs.start(paths.releaseApp);
@@ -102,20 +101,16 @@ test('a real task\'s GPU in the list agrees with Activity Monitor\'s % GPU', asy
       await tasks.openAndRead(meter.pid, 5);
       const ours = [];
       const theirs = [];
-      for (let i = 0; i < 16; i++) {
-        await procs.sleep(1000);
+      for (let i = 0; i < 8; i++) {
+        await procs.sleep(700);
         const row = tasks.rowsNamed(tasks.listNow(meter.pid), 'meter-gpu-load')[0];
         assert.ok(row, 'the GPU stand-in is listed');
         ours.push(value(row.values.GPU));
         theirs.push(value(run(paths.meterAx, ['cell', String(am.pid), 'PID', String(gpu.pid), '% GPU'])));
       }
-      // Activity Monitor averages over its own few seconds, the list over half a second, and
-      // the stand-in's share moves with what else the GPU draws: over the same sixteen seconds
-      // the two agree on average to within a quarter of Activity Monitor's figure (or ten
-      // points).
-      const meterGpu = mean(ours);
-      const amGpu = mean(theirs);
-      assert.ok(Math.abs(meterGpu - amGpu) <= Math.max(10, amGpu * 0.25),
+      const meterGpu = median(ours);
+      const amGpu = median(theirs);
+      assert.ok(Math.abs(meterGpu - amGpu) <= 10,
         `the list reads ${ours.join(', ')}% GPU; Activity Monitor ${theirs.join(', ')}`);
       const row = tasks.rowsNamed(tasks.listNow(meter.pid), 'meter-gpu-load')[0];
       assert.ok(row.tags.includes('GPU') || row.tags.length === 0, `its tags: ${row.tags}`);

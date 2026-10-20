@@ -5,7 +5,7 @@ import MeterCore
 
 /// The real system's tasks: the kernel's process table for who runs each task and when it
 /// started, its resource usage for CPU time and memory, its program's path, and the GPU's
-/// per-client statistics for GPU time.
+/// per-client statistics for GPU time with its own Device Utilization % for how busy it is.
 extension RealInputs: TaskInputs {
   var userID: UInt32 { getuid() }
   var ownPID: Int32 { getpid() }
@@ -16,23 +16,26 @@ extension RealInputs: TaskInputs {
     return String(cString: resolved)
   }
 
-  func processes() -> [ProcessSample]? {
+  func snapshot() -> TaskSnapshot? {
     guard let table = RealTasks.processTable() else { return nil }
     let gpu = RealTasks.gpuTimes()
+    let busy = gpuPerformanceStatistics().flatMap {
+      GPUUtilization.share(performanceStatistics: $0)
+    }
     var appNames: [Int32: String] = [:]
     for app in NSWorkspace.shared.runningApplications {
       if let name = app.localizedName { appNames[app.processIdentifier] = name }
     }
-    return table.compactMap { entry in
+    let processes: [ProcessSample] = table.compactMap { entry in
       guard let usage = RealTasks.usage(entry.pid) else { return nil }
       let path = RealTasks.path(entry.pid)
       let name =
         appNames[entry.pid] ?? path.map { ($0 as NSString).lastPathComponent } ?? entry.command
       return ProcessSample(
         id: TaskID(pid: entry.pid, started: entry.started), name: name, uid: entry.uid,
-        path: path, cpuTime: RealTasks.nanoseconds(usage.cpu), gpuTime: gpu[entry.pid] ?? 0,
-        memory: usage.memory)
+        path: path, cpuTime: RealTasks.nanoseconds(usage.cpu), memory: usage.memory)
     }
+    return TaskSnapshot(processes: processes, gpuTimes: gpu, gpuBusy: busy)
   }
 }
 
@@ -101,8 +104,8 @@ enum RealTasks {
   }
 
   /// Each process's GPU time so far, in nanoseconds: the accumulated GPU time the GPU's
-  /// driver keeps for every client a process opened on it, summed per process. Activity
-  /// Monitor's `% GPU` is the share of time this grows by (D49).
+  /// driver keeps for every client a process opened on it, summed per process, for every
+  /// process with a client, whether or not its other usage can be read (D49).
   static func gpuTimes() -> [Int32: UInt64] {
     var times: [Int32: UInt64] = [:]
     var accelerators: io_iterator_t = 0
