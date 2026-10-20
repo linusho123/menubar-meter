@@ -108,6 +108,9 @@ test('a real task\'s GPU in the list agrees with Activity Monitor\'s % GPU', asy
     }
   })();
   const gpu = procs.start(paths.gpuLoad);
+  // Five tasks each keeping a core busy fill the five CPU rows, so the GPU stand-in can be listed
+  // only as the extra GPU row (D109).
+  const cpuHogs = [1, 2, 3, 4, 5].map(() => procs.start(process.execPath, [path.join(__dirname, 'support', 'load.js'), '1']));
   try {
     // Activity Monitor keeps its columns up to date while its window is in front.
     run('open', ['-b', 'com.apple.ActivityMonitor']);
@@ -126,7 +129,15 @@ test('a real task\'s GPU in the list agrees with Activity Monitor\'s % GPU', asy
     assert.ok(am && am.gpu >= 5, `Activity Monitor's % GPU for the stand-in: ${JSON.stringify(am)}`);
     await withRealMeter(async (meter) => {
       await tasks.openAndRead(meter.pid, 5);
-      const amNow = () => value(run(paths.meterAx, ['cell', String(am.pid), 'PID', String(gpu.pid), '% GPU']));
+      const amNow = () => {
+        for (let attempt = 1; ; attempt++) {
+          try {
+            return value(run(paths.meterAx, ['cell', String(am.pid), 'PID', String(gpu.pid), '% GPU']));
+          } catch (error) {
+            if (attempt === 5) throw error;
+          }
+        }
+      };
       // Activity Monitor's figure moves when it refreshes (about every 5 s), and it reads higher
       // once the panel has been open a few seconds. Its readings count only after its first
       // refresh with the panel open: wait for the figure to change from what it read at opening.
@@ -147,11 +158,18 @@ test('a real task\'s GPU in the list agrees with Activity Monitor\'s % GPU', asy
       const amGpu = median(theirs);
       assert.ok(Math.abs(meterGpu - amGpu) <= 20,
         `the list reads ${ours.join(', ')}% GPU; Activity Monitor ${theirs.join(', ')}`);
-      const row = tasks.rowsNamed(tasks.listNow(meter.pid), 'meter-gpu-load')[0];
-      assert.ok(row.tags.includes('GPU') || row.tags.length === 0, `its tags: ${row.tags}`);
+      // Over a tenth of the GPU and outside the five CPU rows, the task has the sixth row, tagged
+      // GPU and nothing else (D109).
+      const shown = tasks.listNow(meter.pid);
+      const index = shown.rows.findIndex((r) => r.name === 'meter-gpu-load');
+      assert.ok(index >= 0, 'the GPU stand-in is still listed');
+      assert.ok(value(shown.rows[index].values.GPU) > 10, 'the stand-in is over a tenth of the GPU');
+      assert.strictEqual(index, 5, `the GPU row is the sixth: row ${index + 1}`);
+      assert.deepStrictEqual(shown.rows[index].tags, ['GPU'], 'the extra row says GPU, and only GPU');
     });
   } finally {
     await procs.end(gpu);
+    for (const hog of cpuHogs) await procs.end(hog);
     // An Activity Monitor this test started is quit again, politely; the user's is left open.
     const now = (() => {
       try {
