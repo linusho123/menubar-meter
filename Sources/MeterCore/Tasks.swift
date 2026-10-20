@@ -98,12 +98,23 @@ public struct TaskUsage: Equatable, Sendable {
 
 /// Which tasks get no End button (D99, D57).
 public enum SystemTasks {
-  /// macOS's own folder: a program that lives under it is part of macOS.
-  public static let systemFolder = "/System"
+  /// The folders whose programs are part of macOS: all of `/System`, and the folders where macOS
+  /// keeps its services and users run nothing (`/usr/libexec`, `/usr/sbin`, `/sbin`). `/bin` and
+  /// `/usr/bin` are not here: the user runs those commands (the visionary's ruling 2026-10-20).
+  static let systemFolders: [[String]] = [
+    ["system"], ["usr", "libexec"], ["usr", "sbin"], ["sbin"],
+  ]
+
+  /// The one folder inside `/System` whose programs are apps the user runs: Apple's App cryptex,
+  /// where Safari and its helpers live behind `/Applications` (the visionary's ruling
+  /// 2026-10-20). A program must lie below the folder, and no other `/System` path is let
+  /// through by it.
+  static let appCryptex = ["system", "cryptexes", "app"]
 
   /// A task is `system` when it is the meter itself, when it does not run as the user, or when
-  /// its program, every symbolic link resolved, lives in `/System`. A task whose program the
-  /// system does not name cannot be shown to be the user's own, so it is `system` too.
+  /// its program, every symbolic link resolved, lives in a macOS folder. A task whose program the
+  /// system does not name, or names with no absolute path, cannot be shown to be the user's own,
+  /// so it is `system` too.
   public static func isSystem(
     pid: Int32, uid: UInt32, path: String?, userID: UInt32, ownPID: Int32,
     resolve: (String) -> String?
@@ -111,22 +122,26 @@ public enum SystemTasks {
     if pid == ownPID { return true }
     if uid != userID { return true }
     guard let path else { return true }
-    return livesInSystemFolder(resolve(path) ?? path)
+    let resolved = resolve(path) ?? path
+    guard resolved.hasPrefix("/") else { return true }
+    return livesInSystemFolder(resolved)
   }
 
-  /// Whether a resolved path lies in `/System` itself, not merely a folder whose name starts
-  /// the same way (`/Systems`). The Mac's disk ignores case, so neither does this.
+  /// Whether a resolved path lies in one of macOS's folders themselves, not merely in a folder
+  /// whose name starts the same way (`/Systems`), and not in the App cryptex. The Mac's disk
+  /// ignores case, so neither does this.
   public static func livesInSystemFolder(_ path: String) -> Bool {
-    var components: [Substring] = []
+    var components: [String] = []
     for part in path.split(separator: "/", omittingEmptySubsequences: true) {
       switch part {
       case ".": continue
       case "..": if !components.isEmpty { components.removeLast() }
-      default: components.append(part)
+      default: components.append(part.lowercased())
       }
     }
-    guard path.hasPrefix("/"), let first = components.first else { return false }
-    return first.lowercased() == systemFolder.dropFirst().lowercased()
+    guard path.hasPrefix("/") else { return false }
+    if components.count > appCryptex.count, components.starts(with: appCryptex) { return false }
+    return systemFolders.contains { components.count > $0.count && components.starts(with: $0) }
   }
 }
 

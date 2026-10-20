@@ -192,7 +192,70 @@ struct SystemTaskTests {
     #expect(isSystem(path: "//System/Library/x"))
     #expect(isSystem(path: "/Users/../System/Library/x"))
     #expect(!isSystem(path: "/System/../Users/me/x"))
-    #expect(!isSystem(path: "System/Library/x"))
+  }
+
+  @Test("a path that is empty or not absolute names no program: system (fail safe)")
+  func relativePath() {
+    #expect(isSystem(path: "System/Library/x"))
+    #expect(isSystem(path: ""))
+    #expect(isSystem(path: "loginwindow"))
+    #expect(isSystem(path: "./Dock"))
+    #expect(isSystem(path: "node"))
+  }
+
+  @Test("macOS's service folders /usr/libexec, /usr/sbin and /sbin are system (ruled 2026-10-20)")
+  func serviceFolders() {
+    #expect(isSystem(path: "/usr/libexec/trustd"))
+    #expect(isSystem(path: "/usr/sbin/sharingd"))
+    #expect(isSystem(path: "/sbin/launchd"))
+    #expect(isSystem(path: "/USR/libexec/cfprefsd"))
+    #expect(isSystem(path: "/usr/../sbin/x"))
+  }
+
+  @Test("/bin and /usr/bin stay the user's, and lookalikes of the service folders do not match")
+  func commandFolders() {
+    #expect(!isSystem(path: "/bin/zsh"))
+    #expect(!isSystem(path: "/usr/bin/caffeinate"))
+    #expect(!isSystem(path: "/usr/local/bin/node"))
+    #expect(!isSystem(path: "/usr/local/sbin/x"))
+    #expect(!isSystem(path: "/usr/libexecs/x"))
+    #expect(!isSystem(path: "/usr/sbinx/x"))
+    #expect(!isSystem(path: "/sbinx/x"))
+    #expect(!isSystem(path: "/Users/me/usr/libexec/x"))
+    #expect(!isSystem(path: "/Users/me/sbin/x"))
+  }
+
+  @Test("apps from the App cryptex are normal apps: Safari and its helpers keep End")
+  func appCryptex() {
+    let safari = "/System/Cryptexes/App/System/Applications/Safari.app/Contents/MacOS/Safari"
+    #expect(!isSystem(path: safari))
+    #expect(!isSystem(path: safari.replacingOccurrences(of: "MacOS/Safari", with: "XPCServices/x")))
+    #expect(!isSystem(path: "/system/cryptexes/app/System/Applications/Safari.app/x"))
+    #expect(
+      !isSystem(
+        path: "/Applications/Safari.app/Contents/MacOS/Safari",
+        links: ["/Applications/Safari.app/Contents/MacOS/Safari": safari]))
+  }
+
+  @Test("no other /System path rides on the cryptex exception")
+  func cryptexLookalikes() {
+    #expect(isSystem(path: "/System/Cryptexes/App"))
+    #expect(isSystem(path: "/System/Cryptexes/Apps/x"))
+    #expect(isSystem(path: "/System/Cryptexes/AppX/System/Applications/x"))
+    #expect(isSystem(path: "/System/Cryptexes/OS/System/Library/x"))
+    #expect(isSystem(path: "/System/Cryptexes/ExclaveOS/x"))
+    #expect(isSystem(path: "/System/Cryptexes/App/../OS/x"))
+    #expect(isSystem(path: "/System/Cryptexes/App/../../Library/x"))
+    #expect(isSystem(path: "/System/Library/Cryptexes/App/x"))
+    #expect(isSystem(path: "/System/Volumes/Cryptexes/App/x"))
+    #expect(isSystem(path: "/System/Applications/Safari.app/x"))
+    #expect(isSystem(path: "/System/Cryptexes/x/App/y"))
+    #expect(isSystem(path: "/System/Library/CoreServices/Dock.app/Contents/MacOS/Dock"))
+    // A link out of the cryptex into /System proper is resolved first.
+    #expect(
+      isSystem(
+        path: "/System/Cryptexes/App/link",
+        links: ["/System/Cryptexes/App/link": "/System/Library/CoreServices/Dock"]))
   }
 
   @Test("a program the system does not name is system: it cannot be shown to be the user's")
