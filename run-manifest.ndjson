@@ -50,9 +50,9 @@
 {"file":"features/menu-bar-readout.feature","title":"Rounding the menu bar readout [3]","status":"passed"}
 {"file":"features/menu-bar-readout.feature","title":"Rounding the menu bar readout [4]","status":"passed"}
 {"file":"features/menu-bar-readout.feature","title":"Rounding the menu bar readout [5]","status":"passed"}
-{"file":"features/menu-bar-readout.feature","title":"The menu bar item keeps one width [1]","status":"failed"}
-{"file":"features/menu-bar-readout.feature","title":"The menu bar item keeps one width [2]","status":"failed"}
-{"file":"features/menu-bar-readout.feature","title":"The menu bar item keeps one width [3]","status":"failed"}
+{"file":"features/menu-bar-readout.feature","title":"The menu bar item keeps one width [1]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"The menu bar item keeps one width [2]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"The menu bar item keeps one width [3]","status":"passed"}
 {"file":"features/menu-bar-readout.feature","title":"The readout follows a change within a second [1]","status":"passed"}
 {"file":"features/menu-bar-readout.feature","title":"The readout follows a change within a second [2]","status":"passed"}
 {"file":"features/menu-bar-readout.feature","title":"The readout follows a change within a second [3]","status":"passed"}
