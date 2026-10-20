@@ -2,7 +2,7 @@ import AppKit
 
 // Test harness stand-in: a task the harness runs and the only kind of task a test may end.
 //
-//   meter-standin <record file> <control file> [busy threads]
+//   meter-standin <record file> <control file> [busy threads] [quit after ms]
 //
 // Run from inside an .app bundle it is an app (with no Dock icon) that answers the quit request
 // an app's Quit menu item answers; run as a plain program it is a windowless task. Either way it
@@ -12,19 +12,21 @@ import AppKit
 //   QUIT <epoch ms> <event class>/<event id> the app's quit request (the Apple event that asked)
 //   TERM <epoch ms>                         the terminate signal
 // Once it has received a quit request or the terminate signal, it exits (status 0) as soon as
-// the control file reads `exit`: the harness decides how long it takes to quit, never whether
-// it was asked. The kill cannot be caught: the harness sees it as the stand-in's exit signal.
+// the control file reads `exit`, or, given a quit delay, that many milliseconds after it was
+// asked, as an app does that takes a moment to close: the harness decides how long it takes to
+// quit, never whether it was asked. The kill cannot be caught: the harness sees it as the stand-in's exit signal.
 // With busy threads it keeps that many cores busy, so it ranks high by CPU.
 
 let arguments = CommandLine.arguments
 guard arguments.count >= 3 else {
   FileHandle.standardError.write(
-    Data("usage: meter-standin <record file> <control file> [busy threads]\n".utf8))
+    Data("usage: meter-standin <record file> <control file> [busy threads] [quit after ms]\n".utf8))
   exit(2)
 }
 let recordPath = arguments[1]
 let controlPath = arguments[2]
 let busyThreads = arguments.count > 3 ? Int(arguments[3]) ?? 0 : 0
+let quitAfter = arguments.count > 4 ? Double(arguments[4]).map { $0 / 1000 } : nil
 
 func record(_ kind: String, _ detail: String? = nil) {
   let stamp = Int64((Date().timeIntervalSince1970 * 1000).rounded(.down))
@@ -60,6 +62,7 @@ for _ in 0..<busyThreads { Spinner().start() }
 @MainActor
 final class StandIn: NSObject, NSApplicationDelegate {
   private var asked = false
+  private var askedAt: Date?
   private var quitPending = false
   private var termSource: DispatchSourceSignal?
   private var poll: Timer?
@@ -70,7 +73,7 @@ final class StandIn: NSObject, NSApplicationDelegate {
     source.setEventHandler { [weak self] in
       MainActor.assumeIsolated {
         record("TERM")
-        self?.asked = true
+        self?.wasAsked()
       }
     }
     source.resume()
@@ -83,8 +86,15 @@ final class StandIn: NSObject, NSApplicationDelegate {
     if !asApp { record("READY") }
   }
 
+  private func wasAsked() {
+    asked = true
+    if askedAt == nil { askedAt = Date() }
+  }
+
   private func check() {
-    guard asked, controlSaysExit() else { return }
+    guard asked, let askedAt else { return }
+    let due = quitAfter.map { Date().timeIntervalSince(askedAt) >= $0 } ?? false
+    guard due || controlSaysExit() else { return }
     if quitPending {
       quitPending = false
       NSApp.reply(toApplicationShouldTerminate: true)
@@ -101,7 +111,7 @@ final class StandIn: NSObject, NSApplicationDelegate {
     let event = NSAppleEventManager.shared().currentAppleEvent
     let kind = event.map { "\(fourCC($0.eventClass))/\(fourCC($0.eventID))" } ?? "none/none"
     record("QUIT", kind)
-    asked = true
+    wasAsked()
     quitPending = true
     return .terminateLater
   }
