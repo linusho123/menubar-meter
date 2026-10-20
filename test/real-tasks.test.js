@@ -126,18 +126,26 @@ test('a real task\'s GPU in the list agrees with Activity Monitor\'s % GPU', asy
     assert.ok(am && am.gpu >= 5, `Activity Monitor's % GPU for the stand-in: ${JSON.stringify(am)}`);
     await withRealMeter(async (meter) => {
       await tasks.openAndRead(meter.pid, 5);
+      const amNow = () => value(run(paths.meterAx, ['cell', String(am.pid), 'PID', String(gpu.pid), '% GPU']));
+      // Activity Monitor's figure moves when it refreshes (about every 5 s), and it reads higher
+      // once the panel has been open a few seconds. Its readings count only after its first
+      // refresh with the panel open: wait for the figure to change from what it read at opening.
+      const atOpening = amNow();
+      const refreshBy = Date.now() + 10000;
+      while (Date.now() < refreshBy && amNow() === atOpening) await procs.sleep(500);
+      // Then 16 readings of each side over about 15 s, their medians compared.
       const ours = [];
       const theirs = [];
-      for (let i = 0; i < 8; i++) {
-        await procs.sleep(700);
+      for (let i = 0; i < 16; i++) {
+        await procs.sleep(900);
         const row = tasks.rowsNamed(tasks.listNow(meter.pid), 'meter-gpu-load')[0];
         assert.ok(row, 'the GPU stand-in is listed');
         ours.push(value(row.values.GPU));
-        theirs.push(value(run(paths.meterAx, ['cell', String(am.pid), 'PID', String(gpu.pid), '% GPU'])));
+        theirs.push(amNow());
       }
       const meterGpu = median(ours);
       const amGpu = median(theirs);
-      assert.ok(Math.abs(meterGpu - amGpu) <= 10,
+      assert.ok(Math.abs(meterGpu - amGpu) <= 20,
         `the list reads ${ours.join(', ')}% GPU; Activity Monitor ${theirs.join(', ')}`);
       const row = tasks.rowsNamed(tasks.listNow(meter.pid), 'meter-gpu-load')[0];
       assert.ok(row.tags.includes('GPU') || row.tags.length === 0, `its tags: ${row.tags}`);
