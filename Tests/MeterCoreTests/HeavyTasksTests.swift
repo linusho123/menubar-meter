@@ -208,25 +208,21 @@ struct SystemTaskTests {
 
 private final class FedTasks: TaskInputs {
   var list: [ProcessSample]? = []
-  var gpuTimes: [Int32: UInt64] = [:]
-  var gpuBusy: Share?
   var cpuCores = 10
   var physicalMemory: UInt64 = 32 * gib
   var userID: UInt32 = 501
   var ownPID: Int32 = 4242
-  func snapshot() -> TaskSnapshot? {
-    list.map { TaskSnapshot(processes: $0, gpuTimes: gpuTimes, gpuBusy: gpuBusy) }
-  }
+  func processes() -> [ProcessSample]? { list }
   func resolve(path: String) -> String? { path }
 }
 
 private func process(
-  _ pid: Int32, started: UInt64 = 1, cpu: UInt64 = 0, memory: UInt64 = 0,
+  _ pid: Int32, started: UInt64 = 1, cpu: UInt64 = 0, gpu: UInt64 = 0, memory: UInt64 = 0,
   uid: UInt32 = 501, path: String? = "/Users/me/bin/task"
 ) -> ProcessSample {
   ProcessSample(
     id: TaskID(pid: pid, started: started), name: "task\(pid)", uid: uid, path: path,
-    cpuTime: cpu, memory: memory)
+    cpuTime: cpu, gpuTime: gpu, memory: memory)
 }
 
 @Suite("Each task's share of the whole Mac (D54, D107, D80, D49)")
@@ -239,13 +235,11 @@ struct TaskSamplerTests {
     let inputs = FedTasks()
     inputs.cpuCores = cores
     let sampler = TaskSampler(inputs: inputs)
-    inputs.list = [process(7, cpu: 1_000, memory: memory)]
-    inputs.gpuTimes = [7: 5]
+    inputs.list = [process(7, cpu: 1_000, gpu: 5, memory: memory)]
     sampler.sample(now: 10)
     let cpu = UInt64(busyCores * seconds * 1_000_000_000)
     let gpuTime = UInt64(gpu * seconds * 1_000_000_000)
-    inputs.list = [process(7, cpu: 1_000 + cpu, memory: memory)]
-    inputs.gpuTimes = [7: 5 + gpuTime]
+    inputs.list = [process(7, cpu: 1_000 + cpu, gpu: 5 + gpuTime, memory: memory)]
     #expect(sampler.sample(now: 10 + seconds))
     return sampler.tasks.first
   }
@@ -278,76 +272,9 @@ struct TaskSamplerTests {
     #expect(TaskText.value(measure(cores: 10, busyCores: 1, memory: bytes)?.ram) == shown)
   }
 
-  @Test("with no busy figure from the GPU, a task's GPU is its own GPU time over the refresh")
+  @Test("GPU is the share of time the task kept the GPU busy")
   func gpuShare() {
     #expect(TaskText.value(measure(cores: 10, busyCores: 1, gpu: 0.123)?.gpu) == "12.3%")
-  }
-
-  /// Task 7's GPU after one refresh of half a second in which it used `task` ms of GPU time,
-  /// WindowServer (another user's task, not in the list) `other` ms, and the GPU reported
-  /// itself `busy` percent busy.
-  private func gpu(task: UInt64, other: UInt64, busy: UInt64?) -> String {
-    let inputs = FedTasks()
-    let sampler = TaskSampler(inputs: inputs)
-    inputs.gpuBusy = busy.flatMap { Share(part: $0, whole: 100) }
-    inputs.list = [process(7)]
-    inputs.gpuTimes = [7: 1_000, 423: 9_000]
-    sampler.sample(now: 10)
-    inputs.gpuTimes = [7: 1_000 + task * 1_000_000, 423: 9_000 + other * 1_000_000]
-    sampler.sample(now: 10.5)
-    return TaskText.value(sampler.tasks.first?.gpu)
-  }
-
-  @Test(
-    "GPU is Activity Monitor's % GPU: the task's part of all clients' GPU time, of the GPU's busy figure",
-    arguments: [
-      // Light load: 50 ms of 500 is 10% of the time, yet the GPU says 30% busy and the task
-      // took five sixths of its clients' time: 25.0%, as Activity Monitor reads it.
-      (50, 10, 30, "25.0%"),
-      // Heavy load: the GPU's figure and its clients' time agree.
-      (400, 25, 85, "80.0%"),
-      // Every client's time counts, the tasks the list cannot read included.
-      (100, 100, 40, "20.0%"),
-      (0, 100, 40, "0.0%"),
-    ] as [(UInt64, UInt64, UInt64, String)])
-  func gpuAsActivityMonitor(task: UInt64, other: UInt64, busy: UInt64, shown: String) {
-    #expect(gpu(task: task, other: other, busy: busy) == shown)
-  }
-
-  @Test("a GPU with no client time over the refresh gives every task 0.0%")
-  func gpuIdle() {
-    #expect(gpu(task: 0, other: 0, busy: 7) == "0.0%")
-  }
-
-  @Test("a GPU client that closes does not count against the others")
-  func gpuClientCloses() {
-    let inputs = FedTasks()
-    let sampler = TaskSampler(inputs: inputs)
-    inputs.gpuBusy = Share(part: 50, whole: 100)
-    inputs.list = [process(7)]
-    inputs.gpuTimes = [7: 0, 423: 900_000_000]
-    sampler.sample(now: 10)
-    inputs.gpuTimes = [7: 100_000_000, 423: 0]
-    sampler.sample(now: 10.5)
-    #expect(TaskText.value(sampler.tasks.first?.gpu) == "50.0%")
-  }
-
-  @Test("the formula holds exactly at its rounding edge and never passes 100%")
-  func gpuExact() {
-    #expect(
-      TaskText.value(
-        GPUShare.of(task: 101, allClients: 1_000, busy: Share(part: 1, whole: 1), window: 1))
-        == "10.1%")
-    #expect(
-      TaskText.value(
-        GPUShare.of(task: 1_000, allClients: 1_000, busy: Share(part: 1, whole: 1), window: 1))
-        == "100.0%")
-    #expect(
-      TaskText.value(
-        GPUShare.of(
-          task: UInt64.max / 2, allClients: UInt64.max / 2,
-          busy: Share(part: 999_999, whole: 1_000_000),
-          window: 1)) == "100.0%")
   }
 
   @Test("a task first seen in this snapshot has no load yet and is left out")
