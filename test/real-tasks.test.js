@@ -37,7 +37,7 @@ function topMemory(pid) {
 
 test('a real task\'s CPU and RAM in the list agree with ps and top', async () => {
   const cores = probes.cpuCount();
-  const load = procs.start(process.execPath, [path.join(__dirname, 'support', 'load.js'), '2', '1024']);
+  const load = procs.start(process.execPath, [path.join(__dirname, 'support', 'load.js'), '5', '1024']);
   try {
     await procs.sleep(3000);
     await withRealMeter(async (meter) => {
@@ -53,7 +53,7 @@ test('a real task\'s CPU and RAM in the list agree with ps and top', async () =>
       const cpu = median(seen.map((r) => value(r.values.CPU)));
       const ps = probes.psCpu(load.pid) / cores;
       assert.ok(Math.abs(cpu - ps) <= 4, `the list reads ${cpu}% CPU; ps ${ps.toFixed(1)}% of the Mac`);
-      assert.ok(Math.abs(cpu - (2 / cores) * 100) <= 4, `two busy cores of ${cores}: ${cpu}%`);
+      assert.ok(Math.abs(cpu - (5 / cores) * 100) <= 4, `five busy cores of ${cores}: ${cpu}%`);
       const ram = value(seen[seen.length - 1].values.RAM);
       const top = (topMemory(load.pid) / probes.memsize()) * 100;
       assert.ok(Math.abs(ram - top) <= 0.3, `the list reads ${ram}% RAM; top ${top.toFixed(2)}% of the memory`);
