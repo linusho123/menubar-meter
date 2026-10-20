@@ -108,7 +108,9 @@ function pixelsIn(capture, box) {
   const y1 = Math.min(image.height, Math.floor((box.y + box.height - window.y) * scale));
   for (let y = y0; y < y1; y++) {
     for (let x = x0; x < x1; x++) {
-      out.push({ px: window.x + (x + 0.5) / scale, py: window.y + (y + 0.5) / scale, rgb: image.rgb(x, y) });
+      out.push({
+        px: window.x + (x + 0.5) / scale, py: window.y + (y + 0.5) / scale, cx: x, cy: y, rgb: image.rgb(x, y),
+      });
     }
   }
   return out;
@@ -177,7 +179,9 @@ function linePixels(capture) {
   const hues = legendHues(capture);
   const zero = centreOf(capture, '0%');
   const hundred = centreOf(capture, '100%');
-  const inside = { x: graph.x + 1, y: graph.y + 1, width: graph.width - 2, height: graph.height - 2 };
+  // The graph's whole width and a couple of points either side, so a line drawn at the very
+  // edge (the five-minute edge is its left border) is read; the grey frame is not coloured.
+  const inside = { x: graph.x - 2, y: graph.y - 1, width: graph.width + 4, height: graph.height + 2 };
   return pixelsIn(capture, inside).filter((p) => isColoured(p.rgb)).map((p) => {
     const { hue } = hueOf(p.rgb);
     let line = null;
@@ -187,6 +191,8 @@ function linePixels(capture) {
       if (d < best) { best = d; line = label; }
     }
     return {
+      cx: p.cx,
+      cy: p.cy,
       x: (p.px - graph.x) / graph.width,
       value: ((zero - p.py) / (zero - hundred)) * 100,
       line,

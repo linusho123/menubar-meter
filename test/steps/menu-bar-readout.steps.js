@@ -3,11 +3,28 @@
 // source; every Then reads only what macOS shows: the status item through Accessibility.
 const assert = require('node:assert');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const feeds = require('../support/feed');
 const menubar = require('../support/menubar');
 const meter = require('../support/meter');
 const probes = require('../support/probes');
 const procs = require('../support/procs');
+
+/**
+ * Where the menu bar's room for status items starts: the right edge of the notch (the left edge
+ * of the screen's top-right area), or 0 on a screen with none. Read from macOS itself.
+ */
+function menuBarStart() {
+  const script = 'ObjC.import("AppKit"); const a = $.NSScreen.screens.objectAtIndex(0)'
+    + '.auxiliaryTopRightArea; a ? a.origin.x : 0';
+  return Number(execFileSync('osascript', ['-l', 'JavaScript', '-e', script], { encoding: 'utf8' }));
+}
+
+/** A status item macOS really shows lies fully right of the notch; a hidden one does not. */
+function assertShown(item, notchRight, what) {
+  assert.ok(item && item.width > 0 && item.x >= notchRight,
+    `${what} hidden: not enough menu bar room (item at x=${item && item.x}, notch ends at ${notchRight})`);
+}
 
 const DASH = '–';
 const isNumber = (value) => /^\d+(%|°C)$/u.test(value);
@@ -75,8 +92,6 @@ module.exports = (reg) => {
   reg.define(
     /^the menu bar item has been showing CPU (\d+)%, GPU (\d+)%, RAM (\d+)% and (\d+)°C$/,
     async (w, cpu, gpu, ram, temp) => {
-      // Stand-in status items started before and after the meter, so icons sit to its left.
-      await meter.launchNeighbor(w, 'NB1');
       const m = await meter.launchWithFeed(w, feeds.readings({
         cpu: Number(cpu), gpu: Number(gpu), ram: Number(ram), temp: Number(temp),
       }));
@@ -85,11 +100,19 @@ module.exports = (reg) => {
         const f = menubar.fields(i.title);
         return !!f && Object.keys(shows).every((k) => f[k] === shows[k]);
       }, 5000, `the item showing ${JSON.stringify(shows)}`);
-      await meter.launchNeighbor(w, 'NB2');
+      await procs.sleep(500);
+      // Before anything else: macOS hides a status item that has no room (Accessibility still
+      // lists it at a stale place), so the meter must really be in the menu bar.
+      const notchRight = menuBarStart();
+      assertShown(menubar.itemsOf(m.pid)[0], notchRight, 'the meter');
+      // One narrow stand-in started after the meter sits to its left, an icon beside it.
+      await meter.launchNeighbor(w, 'N');
       await procs.sleep(500);
       const [before] = menubar.itemsOf(m.pid);
+      assertShown(before, notchRight, 'the meter');
       w.before = before;
-      w.leftOfItem = menubar.allItems().filter((i) => i.pid !== m.pid && i.x + i.width <= before.x + 1);
+      w.leftOfItem = menubar.allItems()
+        .filter((i) => i.pid !== m.pid && i.x >= notchRight && i.x + i.width <= before.x + 1);
       assert.ok(w.leftOfItem.length > 0, 'at least one menu bar icon sits to the item\'s left');
     });
 

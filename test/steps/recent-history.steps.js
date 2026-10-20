@@ -58,6 +58,38 @@ const median = (xs) => {
   return s[Math.floor(s.length / 2)];
 };
 
+/** Each line ends, at "now", at the height its legend value takes on the 0-100% scale. */
+function linesEndAtLegend(capture) {
+  const pixels = panel.linePixels(capture);
+  for (const line of ['CPU', 'GPU', 'RAM']) {
+    const value = panel.legendValue(capture, line);
+    const end = pixels.filter((p) => p.line === line && p.x >= 0.985);
+    assert.ok(end.length > 0, `the ${line} line reaches "now"`);
+    const at = median(end.map((p) => p.value));
+    assert.ok(Math.abs(at - value) <= 3,
+      `the ${line} line ends at ${at.toFixed(1)}% on the scale; its legend reads ${value}%`);
+  }
+}
+
+/** Most device pixels a steep stroke may skip between two of its own pixels in a column. */
+const GAP = 8;
+
+/** Each line is one trace: in any pixel column its pixels form one contiguous vertical band. */
+function oneTracePerColumn(pixels, line) {
+  const columns = new Map();
+  for (const p of pixels.filter((q) => q.line === line)) {
+    if (!columns.has(p.cx)) columns.set(p.cx, []);
+    columns.get(p.cx).push(p.cy);
+  }
+  for (const [cx, ys] of columns) {
+    ys.sort((a, b) => a - b);
+    for (let i = 1; i < ys.length; i++) {
+      assert.ok(ys[i] - ys[i - 1] <= GAP,
+        `the ${line} line has more than one trace in pixel column ${cx} (rows ${ys[i - 1]} and ${ys[i]})`);
+    }
+  }
+}
+
 /** The time axis: `left` under the graph's left edge, `right` under its right edge. */
 function axisReads(w, left, right) {
   const capture = required(w.capture, 'capture');
@@ -165,16 +197,7 @@ module.exports = (reg) => {
       assert.ok(Math.abs(centre - edge) <= graph.height * 0.08,
         `"${label}" marks the graph's ${end} (label at ${centre}, edge at ${edge})`);
     }
-    // Each line ends, at "now", at the height its legend value takes on that scale.
-    const pixels = panel.linePixels(capture);
-    for (const line of ['CPU', 'GPU', 'RAM']) {
-      const value = panel.legendValue(capture, line);
-      const end = pixels.filter((p) => p.line === line && p.x >= 0.985);
-      assert.ok(end.length > 0, `the ${line} line reaches "now"`);
-      const at = median(end.map((p) => p.value));
-      assert.ok(Math.abs(at - value) <= 3,
-        `the ${line} line ends at ${at.toFixed(1)}% on the scale; its legend reads ${value}%`);
-    }
+    linesEndAtLegend(capture);
   });
 
   // --- The lines ---
@@ -194,6 +217,7 @@ module.exports = (reg) => {
     for (const line of labels) {
       const own = pixels.filter((p) => p.line === line);
       assert.ok(own.length >= 200, `the ${line} line is drawn across the graph: ${describe(own)}`);
+      oneTracePerColumn(pixels, line);
     }
     // Nothing else coloured: no fourth line. A few blended pixels where lines cross are allowed.
     const other = pixels.filter((p) => p.line === null);
@@ -217,6 +241,8 @@ module.exports = (reg) => {
     assert.ok(pixels.length >= 200, `the CPU line is drawn: ${describe(pixels)}`);
     // The spike: the CPU line well above the under-10% it has held since.
     const spike = pixels.filter((p) => p.value > 50);
+    // The scale is fixed whatever the data: every line sits at its legend value's height.
+    linesEndAtLegend(required(w.capture, 'capture'));
     if (where === 'nowhere in the graph') {
       assert.strictEqual(spike.length, 0, `the CPU line rises above 50%: ${describe(spike)}`);
     } else {

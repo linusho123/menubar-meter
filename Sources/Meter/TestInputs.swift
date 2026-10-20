@@ -159,6 +159,9 @@
           setClock(end)
           // No CPU time passes in the counters while the Mac sleeps.
           if integratedTo != nil { integratedTo = pastNow?.milliseconds }
+          // macOS can run a timer tick at wake before it delivers didWake: enough ticks for a
+          // full pass, so a sample is taken in that order too.
+          for _ in 0..<MeterEngine.readsPerPass { tick(pastNow?.seconds ?? 0) }
           workspace.post(name: NSWorkspace.didWakeNotification, object: NSWorkspace.shared)
           offset = end
           continue

@@ -6,6 +6,9 @@ public final class MeterEngine {
   public let sampler: Sampler
   public private(set) var history = History()
   private var cpuReads = 0
+  /// The latest time the meter's clock gave the engine, in `begin`, `tick`, `willSleep` or
+  /// `didWake`: the panel's "now" when it opens between passes.
+  public private(set) var now: Double = 0
 
   public static let readsPerPass = Int((Sampler.passInterval / Sampler.cpuInterval).rounded())
 
@@ -15,6 +18,7 @@ public final class MeterEngine {
 
   /// The first reads: the CPU counters and a full pass.
   public func begin(now: Double) -> Readout {
+    self.now = now
     sampler.sampleCPU(now: now)
     return pass(now: now)
   }
@@ -22,6 +26,7 @@ public final class MeterEngine {
   /// One CPU counter read and, every `readsPerPass` reads, a full pass. Returns the readout
   /// when a pass ran.
   public func tick(now: Double) -> Readout? {
+    self.now = now
     sampler.sampleCPU(now: now)
     cpuReads += 1
     guard cpuReads % Self.readsPerPass == 0 else { return nil }
@@ -41,12 +46,14 @@ public final class MeterEngine {
 
   /// The Mac is going to sleep: the history's lines stop here.
   public func willSleep(now: Double) {
+    self.now = now
     history.sleep(at: now)
   }
 
   /// The Mac woke: the lines resume, never joined across the sleep, and the next CPU load is
   /// measured afresh rather than over the sleep.
   public func didWake(now: Double) {
+    self.now = now
     history.wake(at: now)
     sampler.resetCPUBaseline()
   }

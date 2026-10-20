@@ -121,7 +121,7 @@ final class PanelController {
   /// pass that just ran; nil means the engine's latest.
   func refresh(now: Double?) {
     guard isOpen || now == nil else { return }
-    let at = now ?? engine.history.samples.last?.at ?? 0
+    let at = now ?? engine.now
     graph.show(engine.history, now: at)
     legend.attributedStringValue = Self.legendText(engine.legend(now: at))
   }
