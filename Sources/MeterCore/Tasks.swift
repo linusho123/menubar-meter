@@ -105,11 +105,14 @@ public enum SystemTasks {
     ["system"], ["usr", "libexec"], ["usr", "sbin"], ["sbin"],
   ]
 
-  /// The one folder inside `/System` whose programs are apps the user runs: Apple's App cryptex,
-  /// where Safari and its helpers live behind `/Applications` (the visionary's ruling
-  /// 2026-10-20). A program must lie below the folder, and no other `/System` path is let
-  /// through by it.
-  static let appCryptex = ["system", "cryptexes", "app"]
+  /// The one folder inside `/System` whose programs are apps the user runs: the Applications
+  /// folder of Apple's App cryptex, where Safari lives behind `/Applications`. This is the path
+  /// the system resolves to (`/System/Cryptexes/App` is a link to it, so no resolved path begins
+  /// with that). Only a program inside an `.app` bundle there is let through (the visionary's
+  /// ruling 2026-10-20); the cryptex's `usr/libexec` agents and everything else stay system.
+  static let cryptexApplications = [
+    "system", "volumes", "preboot", "cryptexes", "app", "system", "applications",
+  ]
 
   /// A task is `system` when it is the meter itself, when it does not run as the user, or when
   /// its program, every symbolic link resolved, lives in a macOS folder. A task whose program the
@@ -128,7 +131,7 @@ public enum SystemTasks {
   }
 
   /// Whether a resolved path lies in one of macOS's folders themselves, not merely in a folder
-  /// whose name starts the same way (`/Systems`), and not in the App cryptex. The Mac's disk
+  /// whose name starts the same way (`/Systems`), and not in an app of the App cryptex. The Mac's disk
   /// ignores case, so neither does this.
   public static func livesInSystemFolder(_ path: String) -> Bool {
     var components: [String] = []
@@ -140,8 +143,17 @@ public enum SystemTasks {
       }
     }
     guard path.hasPrefix("/") else { return false }
-    if components.count > appCryptex.count, components.starts(with: appCryptex) { return false }
+    if isInsideCryptexApp(components) { return false }
     return systemFolders.contains { components.count > $0.count && components.starts(with: $0) }
+  }
+
+  /// Whether lowercased path components name a program inside an `.app` bundle sitting directly
+  /// in the App cryptex's Applications folder: `Foo.app`, not `Foo.appx`, with something below it.
+  private static func isInsideCryptexApp(_ components: [String]) -> Bool {
+    guard components.starts(with: cryptexApplications) else { return false }
+    let below = components.dropFirst(cryptexApplications.count)
+    guard below.count > 1, let bundle = below.first else { return false }
+    return bundle.hasSuffix(".app") && bundle.count > ".app".count
   }
 }
 

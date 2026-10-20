@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import MeterCore
@@ -225,37 +226,89 @@ struct SystemTaskTests {
     #expect(!isSystem(path: "/Users/me/sbin/x"))
   }
 
-  @Test("apps from the App cryptex are normal apps: Safari and its helpers keep End")
+  private let cryptex = "/System/Volumes/Preboot/Cryptexes/App"
+
+  @Test("apps inside the App cryptex are normal apps: Safari and its helpers keep End")
   func appCryptex() {
-    let safari = "/System/Cryptexes/App/System/Applications/Safari.app/Contents/MacOS/Safari"
+    let safari = cryptex + "/System/Applications/Safari.app/Contents/MacOS/Safari"
     #expect(!isSystem(path: safari))
-    #expect(!isSystem(path: safari.replacingOccurrences(of: "MacOS/Safari", with: "XPCServices/x")))
-    #expect(!isSystem(path: "/system/cryptexes/app/System/Applications/Safari.app/x"))
+    #expect(
+      !isSystem(
+        path: cryptex + "/System/Applications/Safari.app/Contents/XPCServices/"
+          + "com.apple.Safari.SandboxBroker.xpc/Contents/MacOS/com.apple.Safari.SandboxBroker"))
+    #expect(
+      !isSystem(
+        path: cryptex + "/System/Applications/Safari.app/Contents/Extensions/"
+          + "SafariLinkExtension.appex/Contents/MacOS/SafariLinkExtension"))
+    #expect(!isSystem(path: cryptex.lowercased() + "/System/Applications/Safari.app/x"))
     #expect(
       !isSystem(
         path: "/Applications/Safari.app/Contents/MacOS/Safari",
-        links: ["/Applications/Safari.app/Contents/MacOS/Safari": safari]))
+        links: [
+          "/Applications/Safari.app/Contents/MacOS/Safari": safari
+        ]))
+  }
+
+  @Test("the cryptex's agents and other non-app programs stay system")
+  func cryptexAgents() {
+    #expect(isSystem(path: cryptex + "/usr/libexec/webpushd"))
+    #expect(isSystem(path: cryptex + "/usr/libexec/AuthenticationServicesAgent"))
+    #expect(isSystem(path: cryptex + "/usr/libexec/PasswordBreachAgent"))
+    #expect(isSystem(path: cryptex + "/usr/bin/safaridriver"))
+    #expect(isSystem(path: cryptex + "/System/Applications/Safari"))
+    #expect(isSystem(path: cryptex + "/System/Library/CoreServices/Web App.app/x"))
+    #expect(isSystem(path: cryptex + "/Library/Google/Chrome/Foo.app/x"))
+    #expect(isSystem(path: cryptex + "/System/Applications/Foo.appx/Contents/MacOS/Foo"))
+    #expect(isSystem(path: cryptex + "/System/Applications/Foo/Bar.app/x"))
+    #expect(isSystem(path: cryptex + "/System/Applications/../Library/Foo.app/x"))
+    #expect(
+      isSystem(
+        path: "/Applications/Fake",
+        links: ["/Applications/Fake": cryptex + "/usr/libexec/webpushd"]))
   }
 
   @Test("no other /System path rides on the cryptex exception")
   func cryptexLookalikes() {
-    #expect(isSystem(path: "/System/Cryptexes/App"))
-    #expect(isSystem(path: "/System/Cryptexes/Apps/x"))
-    #expect(isSystem(path: "/System/Cryptexes/AppX/System/Applications/x"))
-    #expect(isSystem(path: "/System/Cryptexes/OS/System/Library/x"))
-    #expect(isSystem(path: "/System/Cryptexes/ExclaveOS/x"))
-    #expect(isSystem(path: "/System/Cryptexes/App/../OS/x"))
-    #expect(isSystem(path: "/System/Cryptexes/App/../../Library/x"))
-    #expect(isSystem(path: "/System/Library/Cryptexes/App/x"))
-    #expect(isSystem(path: "/System/Volumes/Cryptexes/App/x"))
+    let preboot = "/System/Volumes/Preboot"
+    #expect(isSystem(path: cryptex))
+    #expect(isSystem(path: cryptex + "s/System/Applications/Safari.app/x"))
+    #expect(isSystem(path: preboot + "/Cryptexes/AppX/System/Applications/S.app/x"))
+    #expect(isSystem(path: preboot + "/Cryptexes/OS/System/Applications/S.app/x"))
+    #expect(isSystem(path: preboot + "/Cryptexes/App/../OS/System/Applications/S.app/x"))
+    #expect(isSystem(path: preboot + "/Cryptexes/x/App/System/Applications/S.app/x"))
+    #expect(isSystem(path: preboot + "/Other/Cryptexes/App/System/Applications/S.app/x"))
+    #expect(isSystem(path: "/System/Volumes/Cryptexes/App/System/Applications/S.app/x"))
+    // The link /System/Cryptexes/App is never a resolved path, so it earns no exception.
+    #expect(isSystem(path: "/System/Cryptexes/App/System/Applications/Safari.app/x"))
     #expect(isSystem(path: "/System/Applications/Safari.app/x"))
-    #expect(isSystem(path: "/System/Cryptexes/x/App/y"))
     #expect(isSystem(path: "/System/Library/CoreServices/Dock.app/Contents/MacOS/Dock"))
     // A link out of the cryptex into /System proper is resolved first.
     #expect(
       isSystem(
-        path: "/System/Cryptexes/App/link",
-        links: ["/System/Cryptexes/App/link": "/System/Library/CoreServices/Dock"]))
+        path: cryptex + "/System/Applications/Safari.app/link",
+        links: [
+          cryptex + "/System/Applications/Safari.app/link": "/System/Library/CoreServices/Dock"
+        ]))
+  }
+
+  @Test("on this Mac, the real /Applications/Safari.app, resolved by realpath, is not system")
+  func realSafari() throws {
+    let safari = "/Applications/Safari.app/Contents/MacOS/Safari"
+    try #require(FileManager.default.fileExists(atPath: safari), "Safari is not installed")
+    let real: (String) -> String? = { path in
+      guard let resolved = realpath(path, nil) else { return nil }
+      defer { free(resolved) }
+      return String(cString: resolved)
+    }
+    #expect(
+      !SystemTasks.isSystem(
+        pid: 77, uid: 501, path: safari, userID: me, ownPID: meter, resolve: real))
+    let agent = cryptex + "/usr/libexec/webpushd"
+    if FileManager.default.fileExists(atPath: agent) {
+      #expect(
+        SystemTasks.isSystem(
+          pid: 77, uid: 501, path: agent, userID: me, ownPID: meter, resolve: real))
+    }
   }
 
   @Test("a program the system does not name is system: it cannot be shown to be the user's")
