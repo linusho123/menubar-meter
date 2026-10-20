@@ -6,9 +6,9 @@ const paths = require('./support/paths');
 
 runFeatures(paths.features, {
   'menu-bar-readout': require('./steps/menu-bar-readout.steps'),
+  'recent-history': require('./steps/recent-history.steps'),
 }, {
   wip: [
-    'recent-history',
     'heavy-tasks',
     'ending-tasks',
     'network-and-disk',

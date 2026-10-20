@@ -11,4 +11,11 @@ public enum GPUUtilization {
     }
     return value
   }
+
+  /// The same reading as an exact share, for the panel's one decimal.
+  public static func share(performanceStatistics: [String: Int]) -> Share? {
+    percent(performanceStatistics: performanceStatistics).flatMap {
+      Share(part: UInt64($0), whole: 100)
+    }
+  }
 }

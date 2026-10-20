@@ -78,3 +78,14 @@ test('the real readings agree with top, vm_stat and ioreg', async () => {
     await procs.end(load);
   }
 });
+
+test('the panel\'s legend agrees with vm_stat on the real Mac', async () => {
+  const panel = require('./support/panel');
+  await withRealMeter({}, async (meter) => {
+    const capture = await panel.clickAndCapture(meter.pid);
+    const vmStat = (probes.vmStatMemoryUsed() / probes.memsize()) * 100;
+    const ram = panel.legendValue(capture, 'RAM');
+    assert.ok(Math.abs(ram - vmStat) <= 2, `legend RAM ${ram}% vs vm_stat Memory Used ${vmStat.toFixed(1)}%`);
+    assert.match(panel.legend(capture).text, /^CPU \d+\.\d%  GPU \d+\.\d%  RAM \d+\.\d%$/);
+  });
+});

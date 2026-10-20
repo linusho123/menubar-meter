@@ -4,19 +4,36 @@ import MeterCore
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
   private var statusItem: StatusItemController?
+  private var panel: PanelController?
   private var timer: Timer?
-  private var sampler: Sampler?
-  private var cpuReads = 0
+  private var engine: MeterEngine?
+  private var clock: () -> Double = Clock.now
 
   func applicationDidFinishLaunching(_ notification: Notification) {
-    let sampler = Sampler(inputs: Self.makeInputs())
-    let statusItem = StatusItemController()
-    self.sampler = sampler
+    let inputs = makeInputs()
+    let engine = MeterEngine(inputs: inputs)
+    let panel = PanelController(engine: engine)
+    let statusItem = StatusItemController { [weak self] button in
+      self?.panel?.toggle(below: button)
+    }
+    self.engine = engine
+    self.panel = panel
     self.statusItem = statusItem
 
-    let now = ProcessInfo.processInfo.systemUptime
-    sampler.sampleCPU(now: now)
-    statusItem.show(sampler.pass(now: now))
+    // The system's own sleep and wake notifications: a sleep is a gap in the graph (D52).
+    let workspace = NSWorkspace.shared.notificationCenter
+    workspace.addObserver(
+      self, selector: #selector(willSleep), name: NSWorkspace.willSleepNotification, object: nil)
+    workspace.addObserver(
+      self, selector: #selector(didWake), name: NSWorkspace.didWakeNotification, object: nil)
+
+    #if METER_TEST_SOURCE
+      // The test reading source may give the meter a past to have run through: it drives the
+      // same loop over the past's own clock before the live loop starts.
+      (inputs as? TestInputs)?.runPast { [engine] now in _ = engine.tick(now: now) }
+    #endif
+
+    statusItem.show(engine.begin(now: clock()))
 
     let timer = Timer(timeInterval: Sampler.cpuInterval, repeats: true) { [weak self] _ in
       MainActor.assumeIsolated { self?.tick() }
@@ -27,21 +44,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   private func tick() {
-    guard let sampler, let statusItem else { return }
-    let now = ProcessInfo.processInfo.systemUptime
-    sampler.sampleCPU(now: now)
-    cpuReads += 1
-    let readsPerPass = Int((Sampler.passInterval / Sampler.cpuInterval).rounded())
-    if cpuReads % readsPerPass == 0 {
-      statusItem.show(sampler.pass(now: now))
+    guard let engine, let statusItem else { return }
+    let now = clock()
+    if let readout = engine.tick(now: now) {
+      statusItem.show(readout)
+      panel?.refresh(now: now)
     }
   }
 
-  private static func makeInputs() -> MeterInputs {
+  @objc private func willSleep(_ notification: Notification) {
+    engine?.willSleep(now: clock())
+  }
+
+  @objc private func didWake(_ notification: Notification) {
+    engine?.didWake(now: clock())
+  }
+
+  private func makeInputs() -> MeterInputs {
     let real = RealInputs()
     #if METER_TEST_SOURCE
       if let feed = ProcessInfo.processInfo.environment[TestInputs.feedVariable] {
-        return TestInputs(feedPath: feed, real: real)
+        let test = TestInputs(feedPath: feed, real: real)
+        clock = { [test] in test.now() }
+        return test
       }
     #endif
     return real

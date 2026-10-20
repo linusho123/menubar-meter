@@ -76,8 +76,8 @@
 {"file":"features/presence.feature","title":"The meter comes back by itself after a crash [1]","status":"unbound"}
 {"file":"features/presence.feature","title":"The meter comes back by itself after a crash [2]","status":"unbound"}
 {"file":"features/presence.feature","title":"The shortcut opens and closes the panel from any app","status":"unbound"}
-{"file":"features/recent-history.feature","title":"A history shorter than the window leaves the graph's left empty","status":"unbound"}
-{"file":"features/recent-history.feature","title":"A spike stays in the graph only while it is under five minutes old [1]","status":"unbound"}
-{"file":"features/recent-history.feature","title":"A spike stays in the graph only while it is under five minutes old [2]","status":"unbound"}
-{"file":"features/recent-history.feature","title":"Clicking the item opens the five-minute graph","status":"unbound"}
-{"file":"features/recent-history.feature","title":"The time the Mac slept is a gap in the graph","status":"unbound"}
+{"file":"features/recent-history.feature","title":"A history shorter than the window leaves the graph's left empty","status":"passed"}
+{"file":"features/recent-history.feature","title":"A spike stays in the graph only while it is under five minutes old [1]","status":"passed"}
+{"file":"features/recent-history.feature","title":"A spike stays in the graph only while it is under five minutes old [2]","status":"passed"}
+{"file":"features/recent-history.feature","title":"Clicking the item opens the five-minute graph","status":"passed"}
+{"file":"features/recent-history.feature","title":"The time the Mac slept is a gap in the graph","status":"passed"}

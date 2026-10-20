@@ -3,11 +3,7 @@ public enum Rounding {
   /// `part / whole` as a whole percentage, exact for integer inputs, never over 100.
   /// Returns nil when `whole` is zero: there is no share to show.
   public static func wholePercent(part: UInt64, whole: UInt64) -> Int? {
-    guard whole > 0 else { return nil }
-    let clampedPart = min(part, whole)
-    // round(part * 100 / whole) with a half rounding up, in integers.
-    let rounded = (clampedPart * 200 + whole) / (2 * whole)
-    return Int(min(rounded, 100))
+    Share(part: part, whole: whole)?.wholePercent
   }
 
   /// A percentage given as a fraction-bearing number, rounded half up and held to 0...100.

@@ -19,12 +19,18 @@ public enum CPULoad {
   /// The busy share between two counter reads, as a whole percentage.
   /// Nil when no time passed or a counter went backwards (a reset): no honest number exists.
   public static func busyPercent(from earlier: CPUTicks, to later: CPUTicks) -> Int? {
+    busyShare(from: earlier, to: later)?.wholePercent
+  }
+
+  /// The exact busy share between two counter reads: User (with nice) plus System over all
+  /// ticks. Nil when no time passed or a counter went backwards (a reset).
+  public static func busyShare(from earlier: CPUTicks, to later: CPUTicks) -> Share? {
     guard later.user >= earlier.user, later.system >= earlier.system,
       later.idle >= earlier.idle, later.nice >= earlier.nice
     else { return nil }
     let user = (later.user - earlier.user) + (later.nice - earlier.nice)
     let system = later.system - earlier.system
     let idle = later.idle - earlier.idle
-    return Rounding.wholePercent(part: user + system, whole: user + system + idle)
+    return Share(part: user + system, whole: user + system + idle)
   }
 }
