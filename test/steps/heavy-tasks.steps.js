@@ -465,6 +465,9 @@ module.exports = (reg) => {
   reg.define(/^the panel is open$/, async (w) => {
     [['node', 30], ['Xcode', 25], ['Safari', 20], ['Mail', 15], ['Notes', 10], ['Maps', 5]]
       .forEach(([n, cpu]) => setTask(w, n, { cpu }));
+    // Activity Monitor is not the app in front to begin with (an Activity Monitor left in
+    // front would let the Then pass with no click at all): the Finder is brought forward.
+    execFileSync('osascript', ['-e', 'tell application id "com.apple.finder" to activate']);
     const m = await running(w);
     w.capture = await tasks.openAndRead(m.pid, 5);
     w.topFive = tasks.list(w.capture).rows.map((r) => r.name);
@@ -483,6 +486,8 @@ module.exports = (reg) => {
         return [];
       }
     })();
+    const before = JSON.parse(ax(['front']));
+    assert.notStrictEqual(before.bundle, 'com.apple.ActivityMonitor', 'Activity Monitor is not in front before the click');
     w.clickedAt = Date.now();
     ax(['press-button', String(m.pid), 'Open Activity Monitor…']);
     // An Activity Monitor this click started is the harness's to quit again, politely; one the
