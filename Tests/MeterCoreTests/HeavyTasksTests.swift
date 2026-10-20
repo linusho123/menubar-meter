@@ -480,7 +480,7 @@ struct HoldTests {
     let tasks = [task("a", cpu: 40), updatedXcode, updatedNode]
     let ranked = HeavyTasks.rank(tasks)
     #expect(names(ranked) == ["a", "node", "Xcode"])
-    let held = HeavyTasks.holding(xcode.id, at: 1, tags: [], in: ranked, tasks: tasks)
+    let held = HeavyTasks.holding(xcode.id, at: 1, in: ranked, tasks: tasks)
     #expect(names(held) == ["a", "Xcode", "node"])
     #expect(held[1].task.cpu == Share(part: 26, whole: 100))
   }
@@ -494,14 +494,64 @@ struct HoldTests {
     let ranked = HeavyTasks.rank(tasks)
     #expect(!names(ranked).contains("held"))
     let id = TaskID(pid: 99, started: 1)
-    let held = HeavyTasks.holding(id, at: 2, tags: [], in: ranked, tasks: tasks)
+    let held = HeavyTasks.holding(id, at: 2, in: ranked, tasks: tasks)
     #expect(names(held) == ["a", "b", "held", "c", "d"])
+  }
+
+  /// Five CPU rows, a GPU row and a RAM row; the pointer rests on the RAM row.
+  private func crowded(ramHog: (String, Double), gpuHog: (String, Double)) -> [TaskUsage] {
+    var tasks = [
+      task("c1", cpu: 50), task("c2", cpu: 40), task("c3", cpu: 30), task("c4", cpu: 20),
+      task("c5", cpu: 10),
+    ]
+    tasks.append(task("gpuHog", cpu: 0.5, gpu: 20))
+    tasks.append(task("ramHog", cpu: 0.4, ram: 15))
+    tasks.append(task(ramHog.0, cpu: 0.3, ram: ramHog.1))
+    tasks.append(task(gpuHog.0, cpu: 0.2, gpu: gpuHog.1))
+    return tasks
+  }
+
+  @Test("a held extra row that stops being a hog gives way: seven rows, no stale tag")
+  func heldExtraRowStopsBeingAHog() {
+    let before = HeavyTasks.rank(crowded(ramHog: ("other", 1), gpuHog: ("quiet", 0)))
+    #expect(names(before) == ["c1", "c2", "c3", "c4", "c5", "gpuHog", "ramHog"])
+    let held = before[6].task.id
+    // The held task's RAM falls; `other` becomes the RAM hog.
+    var tasks = crowded(ramHog: ("other", 12), gpuHog: ("quiet", 0))
+    tasks = tasks.map {
+      $0.name == "ramHog" ? task("ramHog", cpu: 0.4, ram: 1, pid: $0.id.pid) : $0
+    }
+    let rows = HeavyTasks.rank(tasks)
+    #expect(names(rows) == ["c1", "c2", "c3", "c4", "c5", "gpuHog", "other"])
+    let shown = HeavyTasks.holding(held, at: 6, in: rows, tasks: tasks)
+    #expect(shown.count == 7)
+    #expect(shown[6].task.id == held)
+    #expect(shown[6].tags.isEmpty)
+    #expect(shown.filter { $0.tags == [.ram] }.map(\.task.name) == ["other"])
+    #expect(shown.filter { $0.tags == [.gpu] }.map(\.task.name) == ["gpuHog"])
+  }
+
+  @Test("the same for a held GPU row: seven rows, one row per tag, none stale")
+  func heldGPURowStopsBeingAHog() {
+    let before = HeavyTasks.rank(crowded(ramHog: ("quiet", 0), gpuHog: ("quiet2", 0)))
+    let held = before[5].task.id
+    var tasks = crowded(ramHog: ("quiet", 0), gpuHog: ("other", 30))
+    tasks = tasks.map {
+      $0.name == "gpuHog" ? task("gpuHog", cpu: 0.5, gpu: 1, pid: $0.id.pid) : $0
+    }
+    let rows = HeavyTasks.rank(tasks)
+    let shown = HeavyTasks.holding(held, at: 5, in: rows, tasks: tasks)
+    #expect(shown.count == 7)
+    #expect(shown[5].task.id == held)
+    #expect(shown[5].tags.isEmpty)
+    #expect(shown.filter { $0.tags == [.gpu] }.map(\.task.name) == ["other"])
+    #expect(shown.filter { $0.tags == [.ram] }.map(\.task.name) == ["ramHog"])
   }
 
   @Test("a held task that has left the Mac holds nothing")
   func gone() {
     let ranked = HeavyTasks.rank([task("a", cpu: 40), node])
-    let held = HeavyTasks.holding(xcode.id, at: 0, tags: [], in: ranked, tasks: [node])
+    let held = HeavyTasks.holding(xcode.id, at: 0, in: ranked, tasks: [node])
     #expect(held == ranked)
   }
 

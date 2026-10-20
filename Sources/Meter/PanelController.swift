@@ -24,7 +24,7 @@ final class PanelController {
 
   /// The rows on show, and the row whose End button the pointer rests on (D100).
   private var shownRows: [HeavyRow] = []
-  private var held: (id: TaskID, index: Int, tags: [RowTag])?
+  private var held: (id: TaskID, index: Int)?
 
   init(engine: MeterEngine, tasks: TaskSampler, clock: @escaping () -> Double) {
     self.engine = engine
@@ -188,7 +188,7 @@ final class PanelController {
     let resting = list.endButtonRow(under: NSEvent.mouseLocation)
     if let resting, resting < shownRows.count {
       if held?.index != resting {
-        held = (shownRows[resting].task.id, resting, shownRows[resting].tags)
+        held = (shownRows[resting].task.id, resting)
       }
     } else if held != nil {
       held = nil
@@ -202,7 +202,7 @@ final class PanelController {
     if let held {
       if tasks.tasks.contains(where: { $0.id == held.id }) {
         rows = HeavyTasks.holding(
-          held.id, at: held.index, tags: held.tags, in: rows, tasks: tasks.tasks)
+          held.id, at: held.index, in: rows, tasks: tasks.tasks)
       } else {
         self.held = nil
       }

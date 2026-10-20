@@ -101,17 +101,20 @@ public enum HeavyTasks {
   /// The list as shown while the pointer rests on the End button of row `index` (D100, D101):
   /// that row keeps the task `held`, with its numbers updated from `tasks`, and every other row
   /// takes its place in rank order around it. A held task that has left the Mac holds nothing.
+  /// The list never grows past what it would be without the hold, seven rows at most: a held
+  /// task that is no longer in it carries no tag (a hog outside the five would be in it), and
+  /// the lowest CPU row gives way for it.
   public static func holding(
-    _ held: TaskID, at index: Int, tags: [RowTag], in rows: [HeavyRow], tasks: [TaskUsage]
+    _ held: TaskID, at index: Int, in rows: [HeavyRow], tasks: [TaskUsage]
   ) -> [HeavyRow] {
     var shown = rows
     let row: HeavyRow
     if let current = shown.firstIndex(where: { $0.task.id == held }) {
       row = shown.remove(at: current)
     } else if let task = tasks.first(where: { $0.id == held }) {
-      row = HeavyRow(task: task, tags: tags)
+      row = HeavyRow(task: task, tags: [])
       // It has dropped out of the list: the lowest CPU row gives up its place for it.
-      if tags.isEmpty, let last = shown.lastIndex(where: { $0.tags.isEmpty }),
+      if let last = shown.lastIndex(where: { $0.tags.isEmpty }),
         shown.filter({ $0.tags.isEmpty }).count >= cpuRows
       {
         shown.remove(at: last)
