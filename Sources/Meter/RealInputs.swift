@@ -112,7 +112,9 @@ final class RealInputs: MeterInputs {
           if if_indextoname(UInt32(message.ifm_index), &name) != nil {
             interfaces.append(
               InterfaceCounters(
-                name: String(cString: name), received: message.ifm_data.ifi_ibytes,
+                name: String(
+                  decoding: name.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self),
+                received: message.ifm_data.ifi_ibytes,
                 sent: message.ifm_data.ifi_obytes))
           }
         }

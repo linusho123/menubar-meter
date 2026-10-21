@@ -40,4 +40,34 @@ function psCpu(pid) {
   return Number(run('ps', ['-o', '%cpu=', '-p', String(pid)]).trim());
 }
 
-module.exports = { topCpu, vmStatMemoryUsed, memsize, cpuCount, ioregGpu, psCpu };
+/**
+ * The whole Mac's network bytes so far as `netstat -ib` counts them: every interface's link
+ * row, loopback and virtual interfaces included, which is what Activity Monitor's Network tab
+ * totals (measured against it, DESIGN P5).
+ */
+function netstatBytes() {
+  let received = 0;
+  let sent = 0;
+  for (const line of run('netstat', ['-ib']).split('\n').slice(1)) {
+    const f = line.trim().split(/\s+/);
+    if (f.length < 8 || !/^<Link#\d+>$/.test(f[2])) continue;
+    // From the end: Ipkts Ierrs Ibytes Opkts Oerrs Obytes Coll (an empty Address shifts the rest).
+    received += Number(f[f.length - 5]);
+    sent += Number(f[f.length - 2]);
+  }
+  return { received, sent };
+}
+
+/** Every disk's bytes read and written so far, from the block storage drivers' statistics. */
+function ioregDiskBytes() {
+  const out = run('ioreg', ['-r', '-c', 'IOBlockStorageDriver', '-d', '1', '-w', '0']);
+  let read = 0;
+  let written = 0;
+  for (const m of out.matchAll(/"Bytes \(Read\)"=(\d+)/g)) read += Number(m[1]);
+  for (const m of out.matchAll(/"Bytes \(Write\)"=(\d+)/g)) written += Number(m[1]);
+  return { read, written };
+}
+
+module.exports = {
+  topCpu, vmStatMemoryUsed, memsize, cpuCount, ioregGpu, psCpu, netstatBytes, ioregDiskBytes,
+};

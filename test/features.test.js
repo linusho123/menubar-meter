@@ -9,16 +9,11 @@ runFeatures(paths.features, {
   'recent-history': require('./steps/recent-history.steps'),
   'heavy-tasks': require('./steps/heavy-tasks.steps'),
   'ending-tasks': require('./steps/ending-tasks.steps'),
+  'network-and-disk': require('./steps/network-and-disk.steps'),
 }, {
   wip: [
-    'network-and-disk',
     'presence',
     'own-cost',
-    // The network and disk rows need the panel's network and disk lines (P5).
-    {
-      feature: 'menu-bar-readout',
-      scenarios: ['A value with no fresh reading turns into a dash'],
-    },
   ],
   manifest: path.join(paths.root, 'run-manifest.ndjson'),
 });

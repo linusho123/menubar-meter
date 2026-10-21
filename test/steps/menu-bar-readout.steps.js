@@ -8,6 +8,7 @@ const feeds = require('../support/feed');
 const menubar = require('../support/menubar');
 const meter = require('../support/meter');
 const probes = require('../support/probes');
+const panel = require('../support/panel');
 const procs = require('../support/procs');
 
 /**
@@ -233,9 +234,8 @@ module.exports = (reg) => {
   });
 
   // --- A value with no fresh reading turns into a dash (D114) ---
-  // The network and disk rows wait for the panel's network and disk lines (P5): their
-  // "no fresh ... reading" step is deliberately left unbound and held in the wip register.
-  // The Given owns all the driving: a harness ticker keeps every reading changing, and the
+  // The network and disk rows read the panel's network and disk lines (D95), each one reading
+  // dashed as a whole line (D114). The Given owns all the driving: a harness ticker keeps every reading changing, and the
   // Accessibility watcher records what the user sees. The Thens only read the watcher.
 
   /** The live readings at tick `n`: each differs from the reading two ticks earlier. */
@@ -243,22 +243,47 @@ module.exports = (reg) => {
     const step = n % 4;
     return { cpu: 30 + step * 10, gpu: 10 + step * 10, ram: 30 + step * 10, temp: 50 + step * 5 };
   };
+  /** The network and disk rates at tick `n`, in bytes a second: each changing like the rest. */
+  const ratesAt = (n) => {
+    const mb = 1e6 * (1 + (n % 4));
+    return { network: { received: 2 * mb, sent: mb }, disk: { read: 3 * mb, written: 4 * mb } };
+  };
+  const lineOf = { network: 'Net ', disk: 'Disk ' };
+  const panelReadings = Object.keys(lineOf);
 
   reg.define(/^the meter is live$/, async (w) => {
     w.live = liveAt(0);
-    const m = await meter.launchWithFeed(w, feeds.readings(w.live));
+    const m = await meter.launchWithFeed(w, { ...feeds.readings(w.live), ...ratesAt(0) });
     await menubar.waitForItem(m.pid, allNumbers, 5000, 'every value shown');
     w.dropped = new Set();
     let tick = 0;
     const ticker = setInterval(() => {
       tick += 1;
-      const values = feeds.readings(liveAt(tick));
-      for (const reading of w.dropped) delete values[feedKey[reading]];
+      const values = { ...feeds.readings(liveAt(tick)), ...ratesAt(tick) };
+      for (const reading of w.dropped) delete values[feedKey[reading] || reading];
       w.feed.set(values);
     }, 250);
     w.defer(() => clearInterval(ticker));
     w.watcher = await menubar.watch(m.pid, 15000);
     w.defer(() => w.watcher.stop());
+  });
+
+  // Network and disk show in the panel: the user opens it and watches the line move before
+  // its reading stops.
+  reg.define(/^no fresh (network|disk) reading arrives$/u, async (w, reading) => {
+    const m = required(w.meter, 'meter');
+    await panel.click(m.pid);
+    w.panelWatcher = panel.watchTexts(m.pid, 15000);
+    w.defer(() => w.panelWatcher.stop());
+    const lines = () => new Set(w.panelWatcher.seen
+      .map((s) => panel.lineStarting(s.texts, lineOf[reading])).filter(Boolean));
+    const deadline = Date.now() + 5000;
+    while (lines().size < 3 && Date.now() < deadline) await procs.sleep(50);
+    assert.ok(lines().size >= 3, `the ${reading} line was never live: ${JSON.stringify([...lines()])}`);
+    w.stale = reading;
+    w.dropped.add(reading);
+    w.stoppedAt = Date.now();
+    w.feed.set({ [reading]: null });
   });
 
   reg.define(/^no fresh (CPU|GPU|RAM|temperature) reading arrives$/u, (w, reading) => {
@@ -275,6 +300,10 @@ module.exports = (reg) => {
 
   reg.define(/^the user sees that value shown as "(.+)"$/u, async (w, dash) => {
     const reading = required(w.stale, 'stale');
+    if (panelReadings.includes(reading)) {
+      await panelLineDashed(w, reading, dash);
+      return;
+    }
     const watcher = required(w.watcher, 'watcher');
     const stoppedAt = required(w.stoppedAt, 'stoppedAt');
     const dashed = (s) => menubar.fields(s.title)?.[reading] === `${DASH}${unit(reading)}`;
@@ -303,9 +332,65 @@ module.exports = (reg) => {
     assert.ok(dashed(item), `"${item.title}" shows ${reading} as a dash`);
   });
 
+  /** The panel's line for `reading` turns into `dash`, whole, 3 seconds after it last moved. */
+  async function panelLineDashed(w, reading, dash) {
+    const watcher = required(w.panelWatcher, 'panelWatcher');
+    const stoppedAt = required(w.stoppedAt, 'stoppedAt');
+    const line = (s) => panel.lineStarting(s.texts, lineOf[reading]);
+    const dashed = (s) => line(s) === dash;
+    const deadline = stoppedAt + 5000;
+    let first;
+    while (!first && Date.now() < deadline) {
+      first = watcher.seen.find(dashed);
+      if (!first) await procs.sleep(20);
+    }
+    assert.ok(first, `the ${reading} line never read "${dash}"; saw ${JSON.stringify([...new Set(watcher.seen.map(line))])}`);
+    // No half-dashed line on the way: each read is the whole line live or the whole dash.
+    const live = new RegExp(`^${lineOf[reading]}\\S+ \\d+\\.\\d (KB|MB|GB)/s \\S+ \\d+\\.\\d (KB|MB|GB)/s$`, 'u');
+    for (const s of watcher.seen) {
+      const text = line(s);
+      assert.ok(text === dash || live.test(text), `the ${reading} line read "${text}"`);
+    }
+    let lastChange = watcher.seen[0].at;
+    let previous;
+    for (const s of watcher.seen) {
+      if (dashed(s)) break;
+      if (line(s) !== previous) lastChange = s.at;
+      previous = line(s);
+    }
+    // A pass every half second, a panel read every tenth or so: the last change seen can trail
+    // the last fresh reading by up to a read.
+    assert.ok(first.at - lastChange >= 2750,
+      `the ${reading} line turned into a dash ${first.at - lastChange} ms after the user last saw it change`);
+    const now = panel.lineStarting(panel.textsNow(required(w.meter, 'meter').pid), lineOf[reading]);
+    assert.strictEqual(now, dash, `the ${reading} line reads "${dash}"`);
+  }
+
   reg.define(/^the user sees the other values still updating$/, async (w) => {
     const reading = required(w.stale, 'stale');
     const watcher = required(w.watcher, 'watcher');
+    if (panelReadings.includes(reading)) {
+      // The menu bar's values and the panel's other line go on moving; this line stays a dash.
+      const pw = required(w.panelWatcher, 'panelWatcher');
+      const other = panelReadings.find((r) => r !== reading);
+      const dash = { network: `Net ↓ ${DASH} ↑ ${DASH}`, disk: `Disk R ${DASH} W ${DASH}` }[reading];
+      const base = pw.seen.find((s) => panel.lineStarting(s.texts, lineOf[reading]) === dash);
+      assert.ok(base, `the ${reading} line never showed a dash`);
+      const at = (s, r) => menubar.fields(s.title)?.[r];
+      const titleAt = [...watcher.seen].reverse().find((s) => s.at <= base.at) || watcher.seen[0];
+      const changed = () => {
+        const bar = watcher.seen.filter((s) => s.at >= base.at);
+        const lines = pw.seen.filter((s) => s.at >= base.at);
+        return Object.keys(feedKey).every((r) => bar.some((s) => at(s, r) !== undefined && at(s, r) !== at(titleAt, r)))
+          && lines.some((s) => panel.lineStarting(s.texts, lineOf[other]) !== panel.lineStarting(base.texts, lineOf[other]));
+      };
+      const deadline = Date.now() + 3000;
+      while (!changed() && Date.now() < deadline) await procs.sleep(20);
+      assert.ok(changed(), `the other values stopped updating after the ${reading} line dashed`);
+      const after = pw.seen.filter((s) => s.at >= base.at);
+      assert.ok(after.every((s) => panel.lineStarting(s.texts, lineOf[reading]) === dash), `the ${reading} line stayed a dash`);
+      return;
+    }
     const others = Object.keys(feedKey).filter((r) => r !== reading);
     const dashValue = `${DASH}${unit(reading)}`;
     const at = (s, r) => menubar.fields(s.title)?.[r];
