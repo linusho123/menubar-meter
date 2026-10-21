@@ -255,7 +255,7 @@ module.exports = (reg) => {
     const task = required(w.task, 'task');
     const first = await waitForSample(w, (s) => buttonOf(s, task.name) === FORCE_QUIT, 3000, 'Force Quit');
     const after = first.at - w.clickedAt;
-    assert.ok(after >= 5000 && after <= 6250, `Force Quit showed ${after} ms after the click`);
+    assert.ok(after >= 5000 && after <= 5600, `Force Quit showed ${after} ms after the click`);
     const before = w.timeline.samples.filter((s) => s.at < first.at);
     assert.ok(before.length >= 20, `${before.length} readings before it`);
     for (const s of before) {
@@ -331,7 +331,7 @@ module.exports = (reg) => {
     const task = required(w.task, 'task');
     const first = await waitForSample(w, (s) => buttonOf(s, task.name) === FORCE_QUIT, 6000, 'Force Quit');
     const after = first.at - w.clickedAt;
-    assert.ok(after >= 5000 && after <= 6250, `Force Quit showed ${after} ms after the first click`);
+    assert.ok(after >= 5000 && after <= 5600, `Force Quit showed ${after} ms after the first click`);
     const since = w.timeline.samples.filter((s) => s.at >= w.secondClickAt && s.at < first.at);
     assert.ok(since.length >= 15, `${since.length} readings between the second click and Force Quit`);
     for (const s of since) {
