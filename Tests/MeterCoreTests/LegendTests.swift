@@ -53,6 +53,8 @@ private final class SteadyInputs: MeterInputs {
   }
   func gpuPerformanceStatistics() -> [String: Int]? { ["Device Utilization %": 4] }
   func temperatureSensors() -> [String: Double]? { ["PMU tdie1": 40] }
+  func networkInterfaces(now: Double) -> [InterfaceCounters]? { nil }
+  func diskCounters(now: Double) -> [String: ByteCounts]? { nil }
 }
 
 @Suite("The engine records every pass in the history")

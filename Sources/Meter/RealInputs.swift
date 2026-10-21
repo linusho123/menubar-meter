@@ -86,4 +86,66 @@ final class RealInputs: MeterInputs {
   func temperatureSensors() -> [String: Double]? {
     thermal.read()
   }
+
+  /// Every interface's 64-bit link-level counters, as `netstat -ib` reads them: the kernel's
+  /// interface list (`NET_RT_IFLIST2`), one `RTM_IFINFO2` message per interface.
+  func networkInterfaces(now: Double) -> [InterfaceCounters]? {
+    var mib: [Int32] = [CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0]
+    var length = 0
+    guard sysctl(&mib, 6, nil, &length, nil, 0) == 0, length > 0 else { return nil }
+    // Room for an interface that appears between the two calls.
+    length += length / 4
+    var buffer = [UInt8](repeating: 0, count: length)
+    guard sysctl(&mib, 6, &buffer, &length, nil, 0) == 0 else { return nil }
+    var interfaces: [InterfaceCounters] = []
+    buffer.withUnsafeBytes { raw in
+      var offset = 0
+      while offset + MemoryLayout<if_msghdr>.size <= length {
+        let header = raw.loadUnaligned(fromByteOffset: offset, as: if_msghdr.self)
+        let size = Int(header.ifm_msglen)
+        guard size > 0 else { break }
+        if Int32(header.ifm_type) == RTM_IFINFO2,
+          offset + MemoryLayout<if_msghdr2>.size <= length
+        {
+          let message = raw.loadUnaligned(fromByteOffset: offset, as: if_msghdr2.self)
+          var name = [CChar](repeating: 0, count: Int(IF_NAMESIZE) + 1)
+          if if_indextoname(UInt32(message.ifm_index), &name) != nil {
+            interfaces.append(
+              InterfaceCounters(
+                name: String(cString: name), received: message.ifm_data.ifi_ibytes,
+                sent: message.ifm_data.ifi_obytes))
+          }
+        }
+        offset += size
+      }
+    }
+    return interfaces
+  }
+
+  /// Every disk's bytes read and written, from each block storage driver's statistics (what
+  /// `iostat` and Activity Monitor's Disk tab total), keyed by the driver's registry entry.
+  func diskCounters(now: Double) -> [String: ByteCounts]? {
+    var iterator: io_iterator_t = 0
+    guard
+      IOServiceGetMatchingServices(
+        kIOMainPortDefault, IOServiceMatching("IOBlockStorageDriver"), &iterator)
+        == KERN_SUCCESS
+    else { return nil }
+    defer { IOObjectRelease(iterator) }
+    var disks: [String: ByteCounts] = [:]
+    while case let service = IOIteratorNext(iterator), service != 0 {
+      defer { IOObjectRelease(service) }
+      guard
+        let statistics = IORegistryEntryCreateCFProperty(
+          service, "Statistics" as CFString, kCFAllocatorDefault, 0)?
+          .takeRetainedValue() as? [String: Any],
+        let read = (statistics["Bytes (Read)"] as? NSNumber)?.uint64Value,
+        let written = (statistics["Bytes (Write)"] as? NSNumber)?.uint64Value
+      else { continue }
+      var entry: UInt64 = 0
+      IORegistryEntryGetRegistryEntryID(service, &entry)
+      disks[String(entry)] = ByteCounts(read, written)
+    }
+    return disks
+  }
 }

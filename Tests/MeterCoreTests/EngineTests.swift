@@ -17,6 +17,8 @@ private final class SteadyInputs: MeterInputs {
   }
   func gpuPerformanceStatistics() -> [String: Int]? { ["Device Utilization %": 10] }
   func temperatureSensors() -> [String: Double]? { ["PMU tdie1": 40] }
+  func networkInterfaces(now: Double) -> [InterfaceCounters]? { nil }
+  func diskCounters(now: Double) -> [String: ByteCounts]? { nil }
 }
 
 @Suite("The engine's own time")

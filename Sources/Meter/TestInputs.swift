@@ -13,6 +13,10 @@
   ///   memory:  {"anonymous", "purgeable", "wired", "compressed", "fileBacked"} page counts
   ///   gpu:     the accelerator's performance statistics, e.g. {"Device Utilization %": 4}
   ///   sensors: temperature sensor readings by name, e.g. {"PMU tdie1": 45.0}
+  ///   network: {"received": bytes/s, "sent": bytes/s} - the whole Mac's network rates
+  ///   disk:    {"read": bytes/s, "written": bytes/s} - the whole Mac's disk rates; for each, one
+  ///            interface's (one disk's) counters grow at those rates on the meter's clock,
+  ///            so each pass measures them back exactly
   ///   cores:   optional, the Mac's CPU core count in place of `hw.ncpu`
   ///   tasks:   optional, the running tasks in place of the real ones, each {"pid", "started",
   ///            "name", "uid", "path" (or null), "busyCores": CPU cores it keeps busy,
@@ -65,7 +69,34 @@
       var cores: Int?
       var tasks: [Task]?
       var gpuBusy: Double?
+      var network: Rates?
+      var disk: Rates?
     }
+
+    private struct Rates: Decodable {
+      var received: Double?
+      var sent: Double?
+      var read: Double?
+      var written: Double?
+    }
+
+    /// Fed byte counters, grown at the fed rates from the last read to this one.
+    private struct Counter {
+      var first: Double = 0
+      var second: Double = 0
+      var at: Double?
+
+      mutating func grow(to now: Double, first rate1: Double, second rate2: Double) -> ByteCounts {
+        if let at, now > at {
+          first += max(0, rate1) * (now - at)
+          second += max(0, rate2) * (now - at)
+        }
+        at = now
+        return ByteCounts(UInt64(first.rounded()), UInt64(second.rounded()))
+      }
+    }
+    private var networkCounter = Counter()
+    private var diskCounter = Counter()
 
     private struct Task: Decodable {
       var pid: Int32
@@ -220,6 +251,28 @@
     func temperatureSensors() -> [String: Double]? {
       reload()
       return feed?.sensors
+    }
+
+    func networkInterfaces(now: Double) -> [InterfaceCounters]? {
+      reload()
+      guard let rates = feed?.network else {
+        networkCounter.at = nil
+        return nil
+      }
+      let counts = networkCounter.grow(
+        to: now, first: rates.received ?? 0, second: rates.sent ?? 0)
+      return [InterfaceCounters(name: "en0", received: counts.first, sent: counts.second)]
+    }
+
+    func diskCounters(now: Double) -> [String: ByteCounts]? {
+      reload()
+      guard let rates = feed?.disk else {
+        diskCounter.at = nil
+        return nil
+      }
+      return [
+        "disk0": diskCounter.grow(to: now, first: rates.read ?? 0, second: rates.written ?? 0)
+      ]
     }
 
     /// Runs the meter through the feed's past, if it has one, ending at this moment: `tick`

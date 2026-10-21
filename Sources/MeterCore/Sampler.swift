@@ -9,6 +9,10 @@ public protocol MeterInputs: AnyObject {
   var physicalMemory: UInt64 { get }
   /// The VM page size in bytes.
   var pageSize: UInt64 { get }
+  /// Every network interface's link-level byte counters, read at `now` on the meter's clock.
+  func networkInterfaces(now: Double) -> [InterfaceCounters]?
+  /// Every disk's bytes read and written so far, keyed by the disk, read at `now`.
+  func diskCounters(now: Double) -> [String: ByteCounts]?
 }
 
 /// One sampling pass at a time. CPU is a load over the time between two counter reads, so
@@ -29,6 +33,12 @@ public final class Sampler {
   public private(set) var gpu: Timestamped<Share>?
   public private(set) var ram: Timestamped<Share>?
   public private(set) var temperature: Timestamped<Int>?
+  // Network and disk are rates over the time since the last pass, each from one reading of
+  // its counters, so each line is fresh or stale as a whole (D114).
+  public private(set) var network: Timestamped<ByteRates>?
+  public private(set) var disk: Timestamped<ByteRates>?
+  private var lastNetwork: Timestamped<[String: ByteCounts]>?
+  private var lastDisk: Timestamped<[String: ByteCounts]>?
 
   public init(inputs: MeterInputs) {
     self.inputs = inputs
@@ -43,7 +53,7 @@ public final class Sampler {
     lastTicks = Timestamped(ticks, at: now)
   }
 
-  /// Reads memory, GPU and temperature, then composes the readout with stale values dashed.
+  /// Reads memory, GPU, temperature, network and disk, then composes the readout with stale values dashed.
   public func pass(now: Double) -> Readout {
     if let pages = inputs.memoryPages(),
       let share = MemoryUsed.share(
@@ -61,6 +71,9 @@ public final class Sampler {
     {
       temperature = Timestamped(celsius, at: now)
     }
+    let interfaces = inputs.networkInterfaces(now: now).map(NetworkInterfaces.counted)
+    Self.measure(interfaces, now: now, last: &lastNetwork, rates: &network)
+    Self.measure(inputs.diskCounters(now: now), now: now, last: &lastDisk, rates: &disk)
     return readout(now: now)
   }
 
@@ -80,9 +93,47 @@ public final class Sampler {
       ram: Staleness.fresh(ram, now: now)?.tenthsOfPercent)
   }
 
-  /// Forgets the last CPU counter read, so the next load is measured from a fresh pair of
-  /// reads (after the Mac wakes: a load spanning the sleep is no reading of now).
+  /// The panel's network and disk rates, nil when stale.
+  public func netDisk(now: Double) -> NetDiskValues {
+    NetDiskValues(
+      network: Staleness.fresh(network, now: now), disk: Staleness.fresh(disk, now: now))
+  }
+
+  /// A rate from this read of the counters and the last; a failed read leaves no baseline, so
+  /// the rate after it is measured from two fresh reads, never across the gap.
+  private static func measure(
+    _ counts: [String: ByteCounts]?, now: Double, last: inout Timestamped<[String: ByteCounts]>?,
+    rates: inout Timestamped<ByteRates>?
+  ) {
+    guard let counts else {
+      last = nil
+      return
+    }
+    if let last,
+      let measured = CounterRates.rates(from: last.value, to: counts, seconds: now - last.at)
+    {
+      rates = Timestamped(measured, at: now)
+    }
+    last = Timestamped(counts, at: now)
+  }
+
+  /// Forgets the last CPU, network and disk counter reads, so the next load and rates are
+  /// measured from fresh pairs of reads (after the Mac wakes: a load spanning the sleep is no
+  /// reading of now).
   public func resetCPUBaseline() {
     lastTicks = nil
+    lastNetwork = nil
+    lastDisk = nil
+  }
+}
+
+/// The panel's network and disk rates; nil for a reading with no fresh value.
+public struct NetDiskValues: Equatable, Sendable {
+  public var network: ByteRates?
+  public var disk: ByteRates?
+
+  public init(network: ByteRates?, disk: ByteRates?) {
+    self.network = network
+    self.disk = disk
   }
 }

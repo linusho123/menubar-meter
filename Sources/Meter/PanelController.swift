@@ -3,7 +3,8 @@ import MeterCore
 
 /// The panel that drops down from the menu bar item: the combined five-minute graph of CPU,
 /// GPU and RAM on a fixed axis, its scale and time labels, and the legend of current values
-/// (D50, D51, D52, D19); below them the heavy-tasks list (D10, D108), then `Open Activity
+/// (D50, D51, D52, D19); below them the network and disk lines (D95, D96, D114), the
+/// heavy-tasks list (D10, D108), then `Open Activity
 /// Monitor…` (D59) and `Quit Meter`. It shows no peak values (D9).
 @MainActor
 final class PanelController {
@@ -20,6 +21,8 @@ final class PanelController {
   private let panel: NSPanel
   private let graph: GraphView
   private let legend: NSTextField
+  private let networkLine: NSTextField
+  private let diskLine: NSTextField
   private let list: TaskListView
   private var outsideClicks: Any?
 
@@ -36,6 +39,8 @@ final class PanelController {
     self.clock = clock
     graph = GraphView()
     legend = NSTextField(labelWithString: "")
+    networkLine = NSTextField(labelWithString: "")
+    diskLine = NSTextField(labelWithString: "")
     list = TaskListView(
       width: Self.width - 2 * Self.margin, rowHeight: Self.rowHeight,
       rows: HeavyTasks.cpuRows + 2)
@@ -55,11 +60,14 @@ final class PanelController {
     let plotWidth = Self.width - plotX - margin
     let legendHeight: CGFloat = 18
     let timeHeight = ceil(font.boundingRectForFont.height)
-    // From the bottom: Quit Meter, Open Activity Monitor…, the heavy-tasks list, the legend,
-    // the time axis, the graph.
+    // From the bottom: Quit Meter, Open Activity Monitor…, the heavy-tasks list, the disk and
+    // network lines, the legend, the time axis, the graph.
     let actionsHeight = 2 * Self.rowHeight + 2
     let listY = margin + actionsHeight + 8
-    let legendY = listY + list.frame.height + 10
+    let lineHeight: CGFloat = 18
+    let diskY = listY + list.frame.height + 8
+    let networkY = diskY + lineHeight
+    let legendY = networkY + lineHeight + 4
     let plotY = legendY + legendHeight + 6 + timeHeight + 4
     let height = plotY + Self.plotHeight + margin
 
@@ -102,6 +110,14 @@ final class PanelController {
     legend.frame = NSRect(x: plotX, y: legendY, width: plotWidth, height: legendHeight)
     legend.lineBreakMode = .byClipping
     content.addSubview(legend)
+
+    // The network and disk lines, below the legend: current values only, no history (D95, D96).
+    for (line, y) in [(networkLine, networkY), (diskLine, diskY)] {
+      line.frame = NSRect(x: plotX, y: y, width: plotWidth, height: lineHeight)
+      line.lineBreakMode = .byClipping
+      line.font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+      content.addSubview(line)
+    }
 
     // The heavy-tasks list, below the graph (D10).
     list.frame.origin = NSPoint(x: margin, y: listY)
@@ -178,6 +194,9 @@ final class PanelController {
     let at = now ?? engine.now
     graph.show(engine.history, now: at)
     legend.attributedStringValue = Self.legendText(engine.legend(now: at))
+    let rates = engine.netDisk(now: at)
+    networkLine.stringValue = ByteRateText.network(rates.network)
+    diskLine.stringValue = ByteRateText.disk(rates.disk)
     guard isOpen, now != nil else { return }
     followPointer()
     if tasks.sample(now: clock()) { showList() }

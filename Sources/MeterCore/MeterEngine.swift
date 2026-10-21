@@ -44,6 +44,11 @@ public final class MeterEngine {
     sampler.legend(now: now)
   }
 
+  /// The panel's network and disk rates right now.
+  public func netDisk(now: Double) -> NetDiskValues {
+    sampler.netDisk(now: now)
+  }
+
   /// The Mac is going to sleep: the history's lines stop here.
   public func willSleep(now: Double) {
     self.now = now
