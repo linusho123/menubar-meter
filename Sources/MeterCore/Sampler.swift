@@ -53,7 +53,8 @@ public final class Sampler {
     lastTicks = Timestamped(ticks, at: now)
   }
 
-  /// Reads memory, GPU, temperature, network and disk, then composes the readout with stale values dashed.
+  /// Reads memory, GPU, temperature, network and disk, then composes the readout with stale
+  /// values dashed.
   public func pass(now: Double) -> Readout {
     if let pages = inputs.memoryPages(),
       let share = MemoryUsed.share(
