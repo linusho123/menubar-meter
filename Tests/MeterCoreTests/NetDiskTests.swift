@@ -15,17 +15,17 @@ struct ByteRateTextTests {
       // Below a few KB/s decimal and binary prefixes round alike; the MB and GB steps below
       // and the decimal-prefix test tell them apart.
       (1500.0, "1.5 KB/s"),
-      (299_949.0, "299.9 KB/s"),
-      (299_950.0, "0.3 MB/s"),
-      (300_000.0, "0.3 MB/s"),
-      (999_949.0, "1.0 MB/s"),
+      (300_000.0, "300.0 KB/s"),
+      (500_000.0, "500.0 KB/s"),
+      (999_949.0, "999.9 KB/s"),
       (999_950.0, "1.0 MB/s"),
       (1_000_000.0, "1.0 MB/s"),
       (1_048_576.0, "1.0 MB/s"),
       (112_400_000.0, "112.4 MB/s"),
       (210_000_000.0, "210.0 MB/s"),
-      (299_949_999.0, "299.9 MB/s"),
-      (299_950_000.0, "0.3 GB/s"),
+      (999_949_999.0, "999.9 MB/s"),
+      (999_950_000.0, "1.0 GB/s"),
+      (999_999_999.0, "1.0 GB/s"),
       (1_200_000_000.0, "1.2 GB/s"),
       (1_073_741_824.0, "1.1 GB/s"),
       (5_000_000_000_000.0, "5000.0 GB/s"),
@@ -55,7 +55,7 @@ struct ByteRateTextTests {
   @Test("The lines, and a whole-line dash when the reading is not fresh (D114)")
   func lines() {
     #expect(
-      ByteRateText.network(ByteRates(112_400_000, 300_000)) == "Net ↓ 112.4 MB/s ↑ 0.3 MB/s")
+      ByteRateText.network(ByteRates(112_400_000, 300_000)) == "Net ↓ 112.4 MB/s ↑ 300.0 KB/s")
     #expect(
       ByteRateText.disk(ByteRates(210_000_000, 1_200_000_000)) == "Disk R 210.0 MB/s W 1.2 GB/s")
     #expect(ByteRateText.network(ByteRates(0, 0)) == "Net ↓ 0.0 KB/s ↑ 0.0 KB/s")

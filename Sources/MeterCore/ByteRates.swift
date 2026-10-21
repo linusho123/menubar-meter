@@ -69,16 +69,15 @@ public enum NetworkInterfaces {
   }
 }
 
-/// The panel's network and disk lines (D95, D114): `Net ↓ 112.4 MB/s ↑ 0.3 MB/s` and
+/// The panel's network and disk lines (D95, D114): `Net ↓ 112.4 MB/s ↑ 300.0 KB/s` and
 /// `Disk R 210.0 MB/s W 1.2 GB/s`, a dash for the whole line when its reading is not fresh.
 public enum ByteRateText {
   /// Activity Monitor's prefixes are decimal: a KB is 1000 bytes (measured, DESIGN P5).
   public static let base: Double = 1000
   public static let units = ["KB/s", "MB/s", "GB/s"]
-  /// A value moves up a unit once it reads 300 in the smaller one, so it reads 0.3 in the
-  /// larger: the step D95's rows need (300,000 bytes a second reads `0.3 MB/s`, 210,000,000
-  /// reads `210.0 MB/s`). See the DESIGN changelog, P5, and the question raised with it.
-  public static let stepUp = 300
+  /// A value moves up a unit once it reads 1000 in the smaller one, as Activity Monitor's
+  /// do (999.9 KB/s, then 1.0 MB/s; D117, which amends D95).
+  public static let stepUp = 1000
 
   /// A rate in bytes per second, one decimal, in the unit its number grows into.
   public static func rate(_ bytesPerSecond: Double) -> String {

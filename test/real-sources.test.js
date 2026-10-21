@@ -90,7 +90,7 @@ test('the panel\'s legend agrees with vm_stat on the real Mac', async () => {
   });
 });
 
-/** A panel line's two rates ("Net ↓ 112.4 MB/s ↑ 0.3 MB/s") in bytes a second, decimal prefixes. */
+/** A panel line's two rates ("Net ↓ 112.4 MB/s ↑ 300.0 KB/s") in bytes a second, decimal prefixes. */
 function lineRates(text, label) {
   const unit = '(\\d+\\.\\d) (KB|MB|GB)/s';
   const m = new RegExp(`^${label} \\S+ ${unit} \\S+ ${unit}$`, 'u').exec(text || '');
