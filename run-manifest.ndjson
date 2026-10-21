@@ -1,11 +1,11 @@
 {"run-manifest":1}
-{"file":"features/ending-tasks.feature","title":"A task that exits while showing Force Quit just leaves","status":"unbound"}
-{"file":"features/ending-tasks.feature","title":"Clicking Ending again does nothing","status":"unbound"}
-{"file":"features/ending-tasks.feature","title":"Ending a task that quits","status":"unbound"}
-{"file":"features/ending-tasks.feature","title":"Force Quit appears only for a task still running after five seconds [1]","status":"unbound"}
-{"file":"features/ending-tasks.feature","title":"Force Quit appears only for a task still running after five seconds [2]","status":"unbound"}
-{"file":"features/ending-tasks.feature","title":"Force Quit ends the task outright","status":"unbound"}
-{"file":"features/ending-tasks.feature","title":"The ending state follows its task when rows move","status":"unbound"}
+{"file":"features/ending-tasks.feature","title":"A task that exits while showing Force Quit just leaves","status":"passed"}
+{"file":"features/ending-tasks.feature","title":"Clicking Ending again does nothing","status":"passed"}
+{"file":"features/ending-tasks.feature","title":"Ending a task that quits","status":"passed"}
+{"file":"features/ending-tasks.feature","title":"Force Quit appears only for a task still running after five seconds [1]","status":"passed"}
+{"file":"features/ending-tasks.feature","title":"Force Quit appears only for a task still running after five seconds [2]","status":"passed"}
+{"file":"features/ending-tasks.feature","title":"Force Quit ends the task outright","status":"passed"}
+{"file":"features/ending-tasks.feature","title":"The ending state follows its task when rows move","status":"passed"}
 {"file":"features/heavy-tasks.feature","title":"A long-running hog is never nudged or ended by the app","status":"passed"}
 {"file":"features/heavy-tasks.feature","title":"A macOS or other-user task is listed as system with no End [1]","status":"passed"}
 {"file":"features/heavy-tasks.feature","title":"A macOS or other-user task is listed as system with no End [2]","status":"passed"}

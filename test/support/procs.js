@@ -1,7 +1,8 @@
 'use strict';
 // Processes the harness starts, and the only processes it ever ends. Each is identified by
-// pid AND start time; before a signal the harness checks both still match, so a reused pid
-// can never receive it.
+// pid and start time (to the second, as `ps -o lstart` shows it, backed by the child's exit
+// event); before a signal the harness checks both still match, so a reused pid can never
+// receive it.
 const { spawn, execFileSync } = require('node:child_process');
 
 function startTimeOf(pid) {

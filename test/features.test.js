@@ -8,9 +8,9 @@ runFeatures(paths.features, {
   'menu-bar-readout': require('./steps/menu-bar-readout.steps'),
   'recent-history': require('./steps/recent-history.steps'),
   'heavy-tasks': require('./steps/heavy-tasks.steps'),
+  'ending-tasks': require('./steps/ending-tasks.steps'),
 }, {
   wip: [
-    'ending-tasks',
     'network-and-disk',
     'presence',
     'own-cost',

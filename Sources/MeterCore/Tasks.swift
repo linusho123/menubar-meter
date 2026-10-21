@@ -181,10 +181,11 @@ public final class TaskSampler {
   }
 
   /// Takes a snapshot and, from the one before it, each task's use since. Returns whether the
-  /// list was measured afresh.
+  /// list was measured afresh. `force` bypasses the minimum interval, for a refresh asked for
+  /// at once.
   @discardableResult
-  public func sample(now: Double) -> Bool {
-    if let previous, now - previous.at < Self.minimumInterval { return false }
+  public func sample(now: Double, force: Bool = false) -> Bool {
+    if !force, let previous, now - previous.at < Self.minimumInterval { return false }
     guard let snapshot = inputs.snapshot() else {
       reset()
       return false
