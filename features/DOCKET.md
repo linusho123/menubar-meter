@@ -1000,3 +1000,15 @@ D115 2026-10-19 [I>V] amends D79
 D116 2026-10-19 [V] signs D115
   resp:  the visionary read the contract at normal depth with no corrections, ruled the two held findings, and signs it as of this entry [V]
   touches: D115
+
+D117 2026-10-21 [I>V] amends D95
+  pre:   Activity Monitor reads Data received/sec, Data sent/sec, Data read/sec and Data written/sec of {0 bytes, 0 bytes, 0 bytes, 0 bytes | 112.4 MB, 300 KB, 210.0 MB, 1.2 GB} [I>V]
+  trig:  the visionary opens the panel [I>V]
+  resp:  below the legend the panel reads {`Net ↓ 0.0 KB/s ↑ 0.0 KB/s` and `Disk R 0.0 KB/s W 0.0 KB/s` | `Net ↓ 112.4 MB/s ↑ 300.0 KB/s` and `Disk R 210.0 MB/s W 1.2 GB/s`}: one decimal, the unit growing from KB/s to MB/s to GB/s with the number in decimal steps of a thousand as Activity Monitor's own units do, so `999.9 KB/s` is followed by `1.0 MB/s`, and each value the one Activity Monitor shows for the whole Mac in its Network and Disk tabs, loopback and virtual interfaces counted as Activity Monitor counts them [I>V]
+  why:   the busy row's sent value of `0.3 MB` was a mockup Activity Monitor cannot show, since its units step at a thousand; the visionary ruled the step at a thousand over keeping the mockup, picked `300 KB` for the row from options, and ruled that the network value counts every interface Activity Monitor counts [I>V]
+  spread: Network and disk match Activity Monitor
+  sib:   D91
+  serves: N5
+  touches: D95 D114 D85 D50
+# evidence: P5 builder's measurement on this Mac (branch p5-network-disk, commit 07c107b's DESIGN lines): Activity Monitor's totals are decimal (80.28 GB = 80,282 million bytes), and its packet totals equal the sum of every `netstat -ib` link row, loopback included
+# roads not taken: stepping from KB/s to MB/s at 300 KB so the 0.3 MB/s mockup holds; leaving loopback and virtual interfaces out of the network value

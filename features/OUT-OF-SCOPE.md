@@ -68,8 +68,12 @@ None.
 - **updates.** Rejected: the meter offering updates; silent self-update. The visionary installs them. (D84, 2026-10-18)
 - **new-metrics-place.** Rejected: all three in the panel only; all of them in the menu bar. Temperature in the bar, network and disk in the panel, won. (D85, 2026-10-18)
 - **temperature.** Rejected: Fahrenheit; following the region setting; macOS's heat level word; dropping temperature. Degrees Celsius, accepted as uncheckable, won. (D86, D88, D112, 2026-10-18)
-- **speed-units.** Rejected: the same format unpinned; megabits per second for network; always megabytes per second. Auto-scaling bytes matched to Activity Monitor won. (D95, 2026-10-18)
+- **speed-units.** Rejected: the same format unpinned; megabits per second for network; always megabytes per second; stepping up to MB/s at 300 KB to keep a mockup value; leaving loopback and virtual interfaces out of the network value. Auto-scaling bytes matched to Activity Monitor, in its decimal steps of a thousand and counting what it counts, won. (D95 amended by D117, 2026-10-21)
 - **new-metrics-history.** Rejected: a second small graph. Current values only won. (D96, 2026-10-18)
 - **shortcut.** Rejected: Option-Command-M, macOS's minimize-all; a combination the visionary sets. Control-Option-Command-M won. (D98, 2026-10-18)
 - **notch.** Rejected: the fence alone; a compact form when crowded; dropping temperature from the bar. The fence plus a named assumption won. (D102, D103, 2026-10-18)
 - **tags.** Rejected: untagged extra rows; dropping the extra rows. Plain reason tags with no colour or icon won. (D110, 2026-10-18)
+
+## Sanctioned changes
+
+- `network-and-disk.feature` — "Network and disk match Activity Monitor" — direction: rewords — the busy row's sent value 0.3 MB becomes 300 KB and its network line `Net ↓ 112.4 MB/s ↑ 0.3 MB/s` becomes `Net ↓ 112.4 MB/s ↑ 300.0 KB/s`; the scenario's tag @D95 becomes @D117. (D117, 2026-10-21)

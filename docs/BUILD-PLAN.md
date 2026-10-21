@@ -281,25 +281,27 @@ second click that re-sends, the state left on the old row, a kill on End.
 ## P5 — Network and disk
 
 **Contract:** `network-and-disk.feature`, 1 outline (2 rows).
-**Rulings:** D95 (auto-scaling bytes, one decimal, matched to Activity
-Monitor's Network and Disk tabs), D96 (no history), D114 (whole-line dash).
+**Rulings:** D117 amending D95 (auto-scaling bytes, one decimal, in
+Activity Monitor's decimal steps of a thousand, matched to its Network and
+Disk tabs, loopback and virtual interfaces counted as it counts them), D96 (no history), D114 (whole-line dash).
 **Builds:** network and disk rates in the sampler; the two panel lines.
 **Far-side checks:** Activity Monitor's Network and Disk tab totals read
 through Accessibility, or `netstat -ib` and `iostat` deltas computed by the
 harness with Activity Monitor's units; a real transfer (a local file copy, a
 loopback download) for a non-idle row.
 **Reviewer B's risk:** unit boundaries (999.9 KB/s vs 1.0 MB/s, decimal vs
-binary prefixes as Activity Monitor uses them) and counting loopback or
-virtual interfaces Activity Monitor leaves out.
+binary prefixes as Activity Monitor uses them) and counting exactly the
+interfaces Activity Monitor counts, loopback included (D117), with no
+double counting.
 **Unit tests:** byte formatting at every unit step (999 bytes/s, 1.0 KB/s,
 999.9 KB/s, 1.0 MB/s, GB/s) with Activity Monitor's prefixes, rates from
-counter deltas including a counter reset, the interface filter (loopback
-and virtual interfaces left out).
+counter deltas including a counter reset, the interface set (every
+interface Activity Monitor counts, loopback included, per D117).
 **Register:** `network-and-disk` leaves `wip`, and so does the scenario-scoped
 `menu-bar-readout` entry left by P1 (D114's network and disk rows, bound here
 against the panel's two lines).
 **Expected probes:** binary prefixes, megabits, a missing unit step, loopback
-counted, a half-line dash.
+left out, a step at the wrong value, a half-line dash.
 
 ## P6 — Presence
 
