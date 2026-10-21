@@ -32,6 +32,17 @@ public enum EndRequest: Equatable, Sendable {
   case kill
 }
 
+/// What a click on a row's button came to.
+public enum ClickResult: Equatable, Sendable {
+  /// The request went to the task.
+  case sent(EndRequest)
+  /// Nothing was due: the button was `Ending…`, or Force Quit had been sent already.
+  case ignored
+  /// The task is no longer the one the row showed (gone, replaced under its process id, or
+  /// `system`): nothing was sent, and the row is out of date.
+  case stale
+}
+
 /// A task as the system knows it at the moment something is about to be sent to it.
 public struct RunningTask: Equatable, Sendable {
   public var id: TaskID
@@ -95,23 +106,30 @@ public final class TaskEnder {
   /// it, or a `system` task.
   @discardableResult
   public func click(_ id: TaskID, now: Double) -> EndRequest? {
+    if case .sent(let request) = press(id, now: now) { return request }
+    return nil
+  }
+
+  /// As `click`, saying why nothing was sent: a click on a row whose task was replaced sends
+  /// nothing and is `stale`, so the list can be refreshed at once.
+  public func press(_ id: TaskID, now: Double) -> ClickResult {
     switch button(for: id, now: now) {
     case .end:
-      guard mayEnd(id) else { return nil }
+      guard mayEnd(id) else { return .stale }
       let request: EndRequest = signals.isApp(pid: id.pid) ? .quitRequest : .terminate
       signals.send(request, to: id.pid)
       endings[id] = Ending(clickedAt: now, killed: false)
-      return request
+      return .sent(request)
     case .forceQuit:
       guard mayEnd(id) else {
         endings[id] = nil
-        return nil
+        return .stale
       }
       signals.send(.kill, to: id.pid)
       endings[id]?.killed = true
-      return .kill
+      return .sent(.kill)
     case .ending, .forceQuitSent:
-      return nil
+      return .ignored
     }
   }
 

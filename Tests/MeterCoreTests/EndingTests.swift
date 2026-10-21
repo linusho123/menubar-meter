@@ -323,3 +323,32 @@ struct OutlastsTests {
     #expect(system.requests == [.terminate, .kill])
   }
 }
+
+@Suite("A click on a row whose task was replaced (Q4)")
+struct StaleClickTests {
+  @Test("sends nothing and says the row is stale, so the list refreshes at once")
+  func staleRefreshes() {
+    let system = FakeSignals()
+    let ender = TaskEnder(signals: system)
+    let shown = TaskID(pid: 700, started: 1000)
+    system.run(700, started: 1500)
+    #expect(ender.press(shown, now: 0) == .stale)
+    #expect(system.sent.isEmpty)
+    // A task gone altogether is stale too, at End and at Force Quit.
+    let other = system.run(701)
+    #expect(ender.press(other, now: 0) == .sent(.terminate))
+    system.exit(701)
+    #expect(ender.press(other, now: 5) == .stale)
+  }
+
+  @Test("a click that is rightly ignored is not stale: no refresh")
+  func ignoredIsNotStale() {
+    let system = FakeSignals()
+    let ender = TaskEnder(signals: system)
+    let task = system.run(700)
+    ender.click(task, now: 0)
+    #expect(ender.press(task, now: 1) == .ignored)
+    ender.click(task, now: 5)
+    #expect(ender.press(task, now: 5.5) == .ignored)
+  }
+}
