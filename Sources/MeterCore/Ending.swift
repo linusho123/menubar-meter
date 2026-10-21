@@ -144,9 +144,10 @@ public final class TaskEnder {
   }
 
   /// Whether anything may be sent to task `id` now: the task under its process id is the same
-  /// task, started at the same moment, and is not `system` by the rule the rows follow.
+  /// task, started at the same moment, is not process 0 or 1, and is not `system` by the rule
+  /// the rows follow.
   public func mayEnd(_ id: TaskID) -> Bool {
-    guard id.pid > 0, let task = signals.running(pid: id.pid), task.id == id else { return false }
+    guard id.pid > 1, let task = signals.running(pid: id.pid), task.id == id else { return false }
     return !SystemTasks.isSystem(
       pid: task.id.pid, uid: task.uid, path: task.path, userID: signals.userID,
       ownPID: signals.ownPID, resolve: signals.resolve(path:))

@@ -72,6 +72,8 @@ final class RealSignals: TaskSignals {
   }
 
   func send(_ request: EndRequest, to pid: Int32) {
+    // Never a process group or broadcast (0, negative), never launchd (1), whatever was checked.
+    guard pid > 1 else { return }
     switch request {
     case .quitRequest:
       _ = NSRunningApplication(processIdentifier: pid)?.terminate()

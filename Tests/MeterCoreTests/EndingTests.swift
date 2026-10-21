@@ -352,3 +352,17 @@ struct StaleClickTests {
     #expect(ender.press(task, now: 5.5) == .ignored)
   }
 }
+
+@Suite("Process ids 0 and 1 (S4)")
+struct PidGuardTests {
+  @Test("process id 1 is never signalled, even for a task that looks like the user's own")
+  func pidOne() {
+    let system = FakeSignals()
+    let ender = TaskEnder(signals: system)
+    let id = TaskID(pid: 1, started: 1)
+    system.tasks[1] = RunningTask(id: id, uid: 501, path: "/Users/me/bin/task")
+    #expect(ender.click(id, now: 0) == nil)
+    #expect(!ender.mayEnd(id))
+    #expect(system.sent.isEmpty)
+  }
+}
