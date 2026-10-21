@@ -25,7 +25,7 @@ final class PanelController {
 
   /// The rows on show, and the row whose End button the pointer rests on (D100).
   private var shownRows: [HeavyRow] = []
-  private var held: (id: TaskID, index: Int)?
+  private var hold = PointerHold()
 
   init(
     engine: MeterEngine, tasks: TaskSampler, ender: TaskEnder, clock: @escaping () -> Double
@@ -150,7 +150,7 @@ final class PanelController {
     panel.setFrameOrigin(origin)
     // The tasks are sampled only while the panel is open: the first snapshot now, the first
     // measured list a moment later.
-    held = nil
+    hold.reset()
     tasks.reset()
     tasks.sample(now: clock())
     showList()
@@ -167,7 +167,7 @@ final class PanelController {
     panel.orderOut(nil)
     if let outsideClicks { NSEvent.removeMonitor(outsideClicks) }
     outsideClicks = nil
-    held = nil
+    hold.reset()
     tasks.reset()
   }
 
@@ -197,25 +197,20 @@ final class PanelController {
   /// left the button, re-ranking the list there and then (D100, D101).
   private func followPointer() {
     let resting = list.endButtonRow(under: NSEvent.mouseLocation)
-    if let resting, resting < shownRows.count {
-      if held?.index != resting {
-        held = (shownRows[resting].task.id, resting)
-      }
-    } else if held != nil {
-      held = nil
-      showList()
-    }
+    if hold.follow(resting: resting, shown: shownRows.map(\.task.id)) { showList() }
   }
 
-  /// The list as ranked now, holding the row whose End button the pointer rests on (D100).
+  /// The list as ranked now, holding the row whose End button the pointer rests on (D100). When
+  /// the held task has gone the list refills, and the End button that slides under the pointer
+  /// is greyed out until the pointer leaves it.
   private func showList() {
     var rows = HeavyTasks.rank(tasks.tasks)
-    if let held {
+    if let held = hold.held {
       if tasks.tasks.contains(where: { $0.id == held.id }) {
         rows = HeavyTasks.holding(
           held.id, at: held.index, in: rows, tasks: tasks.tasks)
       } else {
-        self.held = nil
+        hold.heldTaskLeft()
       }
     }
     // A task that has gone takes its ending state with it (D40); until a list is measured (the
@@ -223,6 +218,7 @@ final class PanelController {
     if tasks.hasList { ender.keep(only: Set(tasks.tasks.map(\.id))) }
     shownRows = rows
     let now = clock()
+    list.disarmedRow = hold.disarmed
     list.show(rows) { ender.button(for: $0, now: now) }
   }
 
@@ -230,6 +226,7 @@ final class PanelController {
   /// five seconds after the click (D62).
   private func showButtons() {
     let now = clock()
+    list.disarmedRow = hold.disarmed
     list.showButtons { ender.button(for: $0, now: now) }
   }
 

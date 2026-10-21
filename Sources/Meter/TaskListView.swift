@@ -22,6 +22,12 @@ final class TaskListView: NSView {
 
   private let rowViews: [TaskRowView]
 
+  /// The row whose End button is greyed out, whatever its task's state, until the pointer leaves
+  /// it: the task that moved under the resting pointer is not the one the user chose.
+  var disarmedRow: Int? {
+    didSet { for (index, row) in rowViews.enumerated() { row.armed = index != disarmedRow } }
+  }
+
   /// Called when the user clicks the End button of the row showing task `id`.
   var onEnd: ((TaskID) -> Void)? {
     didSet { for row in rowViews { row.onEnd = onEnd } }
@@ -117,6 +123,11 @@ final class TaskRowView: NSView {
   /// The task the row shows now, and the one it showed when the mouse went down on its End
   /// button: a click acts only if the row still shows the task it was begun on.
   var task: TaskID?
+  /// False while the pointer rests on the End button of a task that moved in under it.
+  var armed = true {
+    didSet { if let state { showButton(state) } }
+  }
+  private var state: EndButton?
   private var pressedOn: TaskID?
   var onEnd: ((TaskID) -> Void)?
 
@@ -148,15 +159,16 @@ final class TaskRowView: NSView {
   }
 
   @objc private func endClicked(_ sender: Any?) {
-    guard let task else { return }
+    guard let task, armed else { return }
     // The row was re-ranked between the mouse going down and coming up: not this task.
     if let pressedOn, pressedOn != task { return }
     onEnd?(task)
   }
 
   func showButton(_ state: EndButton) {
+    self.state = state
     if endButton.title != state.title { endButton.title = state.title }
-    endButton.isEnabled = state.isClickable
+    endButton.isEnabled = state.isClickable && armed
   }
 
   func show(_ row: HeavyRow, button: EndButton) {

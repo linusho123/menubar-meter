@@ -184,5 +184,5 @@ function timeline(world, meterPid, standIns) {
 }
 
 module.exports = {
-  start, letQuit, received, requests, isRunning, assertOwn, clickButton, movePointer, timeline, centre, inside,
+  start, letQuit, received, requests, isRunning, assertOwn, rowUnderPointer, clickButton, movePointer, timeline, centre, inside,
 };

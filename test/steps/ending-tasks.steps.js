@@ -108,6 +108,26 @@ function assertAskedOnce(task, clickedAt) {
   assert.ok(got[0].at >= clickedAt - 50 && got[0].at <= clickedAt + 1500, `the terminate signal came with the click (${got[0].at - clickedAt} ms)`);
 }
 
+/**
+ * The pointer has not moved since it rested on the End button of a task that has now left (D40,
+ * D62): the list has refilled and another task's row is under it. Its button must be greyed out,
+ * and a click at that very point must send that task nothing (D60, D100).
+ */
+async function assertClickUnderRestingPointerSendsNothing(w, m) {
+  const { row, pointer } = standins.rowUnderPointer(m.pid);
+  assert.ok(row, 'a row lies under the resting pointer');
+  const owner = w.standIns.get(row.name);
+  assert.ok(owner, `the row under the pointer is one of the harness's stand-ins, not ${row.name}`);
+  const button = row.buttons.find((b) => standins.inside(pointer, b));
+  assert.ok(button, `${row.name}'s End button lies under the pointer`);
+  assert.deepStrictEqual([button.text, button.enabled], ['End', false], `${row.name}'s button under the still pointer`);
+  standins.assertOwn(owner, row);
+  execFileSync(paths.meterAx, ['click', String(pointer.x), String(pointer.y)]);
+  await procs.sleep(700);
+  assert.deepStrictEqual(standins.requests(owner), [], `${owner.name} was sent nothing by a click at the resting pointer`);
+  assert.ok(standins.isRunning(owner), `ps: ${owner.name} still runs`);
+}
+
 module.exports = (reg) => {
   // --- Ending a task that quits (D60) ---
 
@@ -279,6 +299,8 @@ module.exports = (reg) => {
     const capture = await tasks.waitForList(m.pid, (l) => !l.rows.some((r) => r.name === task.name), 3000, 'its row gone');
     const shown = tasks.list(capture);
     assert.deepStrictEqual(shown.rows.map((r) => r.name), ['busy1', 'busy2', 'busy3', 'busy4', 'quiet1'], describeRows(shown));
+    // The pointer still rests where the task's button was: the next task's End is greyed out.
+    await assertClickUnderRestingPointerSendsNothing(w, m);
   });
 
   // --- Clicking Ending… again (D63) ---
@@ -336,10 +358,16 @@ module.exports = (reg) => {
       assert.ok(standins.isRunning(other), `ps: ${other.name} still runs`);
       assert.deepStrictEqual(standins.requests(other), [], `${other.name} was asked nothing`);
     }
-    // And none is left one click from it: each other row offers its ordinary End.
+    // The pointer has not moved: the next task slid under it, and a click there sends nothing.
+    await assertClickUnderRestingPointerSendsNothing(w, m);
+    // Moved off the button, each other row offers its ordinary End again.
     const shown = tasks.listNow(m.pid);
-    for (const row of shown.rows) {
-      assert.deepStrictEqual(row.buttons.map((b) => [b.text, b.enabled]), [['End', true]], describeRows(shown));
+    const heading = standins.centre(shown.heading);
+    standins.movePointer(w, heading.x, heading.y);
+    await procs.sleep(500);
+    const after = tasks.listNow(m.pid);
+    for (const row of after.rows) {
+      assert.deepStrictEqual(row.buttons.map((x) => [x.text, x.enabled]), [['End', true]], describeRows(after));
     }
   });
 
