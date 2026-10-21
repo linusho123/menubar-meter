@@ -1,6 +1,7 @@
 'use strict';
 // Stand-ins: the only tasks a test may ever end. Each is a process the harness itself starts,
-// known by its pid AND its start time, running a program file no other process runs (a copy of
+// known by its pid and its start time (read to the second, as `ps` shows it; the exit event
+// and the program path back it), running a program file no other process runs (a copy of
 // the stand-in program under its own name in a folder of its own, or the stand-in app named
 // Xcode the build makes; never the real Xcode). Each records what it receives in a file the
 // harness reads: the app's quit request, the terminate signal; the kill shows as the signal its
@@ -46,6 +47,9 @@ const requests = (standIn) => received(standIn).filter((e) => e.kind !== 'READY'
  * it (`letQuit`). It never quits unasked.
  */
 async function start(world, name, { app = false, busy = 0, quitAfterMs } = {}) {
+  // `pgrep -x` and the kernel's process name hold 15 characters at most: a longer name could
+  // match another process, or none.
+  if (name.length > 15) throw new Error(`the stand-in name "${name}" is longer than 15 characters`);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'meter-standin-'));
   const record = path.join(dir, 'record');
   const control = path.join(dir, 'control');
@@ -96,7 +100,7 @@ function pidsNamed(name) {
 
 /**
  * Throws unless the row the user sees named `row.name` is this stand-in's: the name is the
- * stand-in's, the process the harness started still runs with the same pid and start time and
+ * stand-in's, the process the harness started still runs with the same pid and start time (to the second) and
  * the same program file, and it is the only process of that name on the Mac.
  */
 function assertOwn(standIn, row) {
