@@ -93,7 +93,7 @@ test('the panel\'s legend agrees with vm_stat on the real Mac', async () => {
 /** A panel line's two rates ("Net ↓ 112.4 MB/s ↑ 0.3 MB/s") in bytes a second, decimal prefixes. */
 function lineRates(text, label) {
   const unit = '(\\d+\\.\\d) (KB|MB|GB)/s';
-  const m = new RegExp(`^${label} ${unit} \\S+ ${unit}$`, 'u').exec(text || '');
+  const m = new RegExp(`^${label} \\S+ ${unit} \\S+ ${unit}$`, 'u').exec(text || '');
   if (!m) return null;
   const scale = { KB: 1e3, MB: 1e6, GB: 1e9 };
   return [Number(m[1]) * scale[m[2]], Number(m[3]) * scale[m[4]]];

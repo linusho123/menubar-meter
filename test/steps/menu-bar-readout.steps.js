@@ -243,9 +243,12 @@ module.exports = (reg) => {
     const step = n % 4;
     return { cpu: 30 + step * 10, gpu: 10 + step * 10, ram: 30 + step * 10, temp: 50 + step * 5 };
   };
-  /** The network and disk rates at tick `n`, in bytes a second: each changing like the rest. */
+  /**
+   * The network and disk rates at tick `n`, in bytes a second: each differs from the rate two
+   * ticks earlier, and a pass every second tick still sees every one of the three.
+   */
   const ratesAt = (n) => {
-    const mb = 1e6 * (1 + (n % 4));
+    const mb = 1e6 * (1 + (n % 3));
     return { network: { received: 2 * mb, sent: mb }, disk: { read: 3 * mb, written: 4 * mb } };
   };
   const lineOf = { network: 'Net ', disk: 'Disk ' };
