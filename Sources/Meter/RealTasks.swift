@@ -71,9 +71,13 @@ final class RealSignals: TaskSignals {
     return app.activationPolicy != .prohibited
   }
 
-  func send(_ request: EndRequest, to pid: Int32) {
+  func send(_ request: EndRequest, to id: TaskID) {
+    let pid = id.pid
     // Never a process group or broadcast (0, negative), never launchd (1), whatever was checked.
     guard pid > 1 else { return }
+    // The last look, immediately before the signal: the task under the process id must still
+    // be the one started at that moment.
+    guard let now = RealTasks.identity(pid), now.started == id.started else { return }
     switch request {
     case .quitRequest:
       _ = NSRunningApplication(processIdentifier: pid)?.terminate()

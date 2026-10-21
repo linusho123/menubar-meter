@@ -7,13 +7,24 @@ import Testing
 private final class FakeSignals: TaskSignals {
   var tasks: [Int32: RunningTask] = [:]
   var apps: Set<Int32> = []
-  var sent: [(EndRequest, Int32)] = []
+  var sent: [(EndRequest, TaskID)] = []
+  /// Every question asked and every send made, in order.
+  var calls: [String] = []
   let userID: UInt32 = 501
   let ownPID: Int32 = 4242
 
-  func running(pid: Int32) -> RunningTask? { tasks[pid] }
-  func isApp(pid: Int32) -> Bool { apps.contains(pid) }
-  func send(_ request: EndRequest, to pid: Int32) { sent.append((request, pid)) }
+  func running(pid: Int32) -> RunningTask? {
+    calls.append("running")
+    return tasks[pid]
+  }
+  func isApp(pid: Int32) -> Bool {
+    calls.append("isApp")
+    return apps.contains(pid)
+  }
+  func send(_ request: EndRequest, to id: TaskID) {
+    calls.append("send")
+    sent.append((request, id))
+  }
   func resolve(path: String) -> String? { path }
 
   /// A task the user runs from their own folder, started at `started`.
@@ -78,7 +89,7 @@ struct EndStateTests {
     #expect(!ender.button(for: task, now: 5).isClickable)
     #expect(ender.click(task, now: 5.5) == nil)
     #expect(system.requests == [.terminate, .kill])
-    #expect(system.sent.allSatisfy { $0.1 == 700 })
+    #expect(system.sent.allSatisfy { $0.1.pid == 700 })
   }
 
   @Test("an app gets its own quit request, a windowless task the terminate signal; never a kill")
@@ -364,5 +375,24 @@ struct PidGuardTests {
     #expect(ender.click(id, now: 0) == nil)
     #expect(!ender.mayEnd(id))
     #expect(system.sent.isEmpty)
+  }
+}
+
+@Suite("The window between the check and the send (S3)")
+struct SendWindowTests {
+  @Test("the request is worked out first, the task checked after, and nothing comes between")
+  func checkThenSend() {
+    let system = FakeSignals()
+    let ender = TaskEnder(signals: system)
+    let app = system.run(800, started: 4321, app: true)
+    ender.click(app, now: 0)
+    #expect(system.calls == ["isApp", "running", "send"])
+    #expect(system.sent.first?.1 == app)
+    let task = system.run(801, started: 77)
+    system.calls = []
+    ender.click(task, now: 0)
+    ender.click(task, now: 5)
+    #expect(system.calls == ["isApp", "running", "send", "running", "send"])
+    #expect(system.sent.last?.1 == task)
   }
 }

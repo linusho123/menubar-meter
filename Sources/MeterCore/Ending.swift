@@ -64,8 +64,9 @@ public protocol TaskSignals: AnyObject {
   func running(pid: Int32) -> RunningTask?
   /// Whether the task with this process id is an app, which takes the quit request.
   func isApp(pid: Int32) -> Bool
-  /// Sends `request` to the task with this process id.
-  func send(_ request: EndRequest, to pid: Int32)
+  /// Sends `request` to task `id`, reading its start time again immediately before the signal
+  /// and sending nothing when the task under that process id is not the one started then.
+  func send(_ request: EndRequest, to id: TaskID)
   /// The user the meter runs as.
   var userID: UInt32 { get }
   /// The meter's own process id.
@@ -115,9 +116,11 @@ public final class TaskEnder {
   public func press(_ id: TaskID, now: Double) -> ClickResult {
     switch button(for: id, now: now) {
     case .end:
-      guard mayEnd(id) else { return .stale }
+      // The request is worked out before the task is checked, so nothing slow lies between the
+      // check and the send.
       let request: EndRequest = signals.isApp(pid: id.pid) ? .quitRequest : .terminate
-      signals.send(request, to: id.pid)
+      guard mayEnd(id) else { return .stale }
+      signals.send(request, to: id)
       endings[id] = Ending(clickedAt: now, killed: false)
       return .sent(request)
     case .forceQuit:
@@ -125,7 +128,7 @@ public final class TaskEnder {
         endings[id] = nil
         return .stale
       }
-      signals.send(.kill, to: id.pid)
+      signals.send(.kill, to: id)
       endings[id]?.killed = true
       return .sent(.kill)
     case .ending, .forceQuitSent:
