@@ -12,9 +12,8 @@ struct ByteRateTextTests {
       (50.0, "0.1 KB/s"),
       (999.0, "1.0 KB/s"),
       (1000.0, "1.0 KB/s"),
-      // A binary prefix would read 1024 bytes as 1.0 KB/s and 1000 as 1.0 only by rounding:
-      // 1500 bytes is 1.5 KB/s in Activity Monitor's kilobytes, 1.46 (1.5) in binary, so the
-      // distinguishing steps are the larger ones below.
+      // Below a few KB/s decimal and binary prefixes round alike; the MB and GB steps below
+      // and the decimal-prefix test tell them apart.
       (1500.0, "1.5 KB/s"),
       (299_949.0, "299.9 KB/s"),
       (299_950.0, "0.3 MB/s"),
