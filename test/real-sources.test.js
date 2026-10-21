@@ -90,61 +90,97 @@ test('the panel\'s legend agrees with vm_stat on the real Mac', async () => {
   });
 });
 
-/** A panel line's two rates ("Net ↓ 112.4 MB/s ↑ 300.0 KB/s") in bytes a second, decimal prefixes. */
-function lineRates(text, label) {
-  const unit = '(\\d+\\.\\d) (KB|MB|GB)/s';
+/** A panel line's two rate texts ("Net ↓ 112.4 MB/s ↑ 300.0 KB/s"), or null when it is not one. */
+function lineTexts(text, label) {
+  const unit = '(\\d+\\.\\d [KMG]B/s)';
   const m = new RegExp(`^${label} \\S+ ${unit} \\S+ ${unit}$`, 'u').exec(text || '');
-  if (!m) return null;
-  const scale = { KB: 1e3, MB: 1e6, GB: 1e9 };
-  return [Number(m[1]) * scale[m[2]], Number(m[3]) * scale[m[4]]];
+  return m ? [m[1], m[2]] : null;
 }
 
-test('the panel\'s network and disk lines agree with netstat and ioreg under a real transfer', async () => {
-  const panel = require('./support/panel');
-  const os = require('node:os');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'meter-transfer-'));
-  const MB = 1e6;
-  try {
-    await withRealMeter({}, async (meter) => {
-      await panel.click(meter.pid);
-      // Loopback traffic (Activity Monitor counts lo0, as measured) and uncached disk reads and
-      // writes, each at a steady rate, for 10 s: about 300 MB in all, in a temporary folder.
-      const transfer = procs.start('python3', ['-I', path.join(__dirname, 'support', 'transfer.py'),
-        '10', String(20 * MB), String(8 * MB), String(6 * MB), dir]);
+/**
+ * A real, paced transfer on this Mac while the panel is open, compared with what netstat and
+ * ioreg count over the same seconds. Two streams: 20 MB/s, whose mean must match the system's to
+ * 2% on the network (a 1024 prefix is 4.7% off there); and 1.01 MB/s, just over the step from KB
+ * to MB, where a step at 1024 (or 300) leaves a reading such as `1005.0 KB/s` that the decimal
+ * reference formatter would write otherwise, and a 1024 prefix reads 2.4% low.
+ */
+/** The system's counters and the moment they were read (the middle of the reads). */
+function snapshot() {
+  const before = Date.now();
+  const net = probes.netstatBytes();
+  const disk = probes.ioregDiskBytes();
+  return { net, disk, at: (before + Date.now()) / 2 };
+}
+
+const STREAMS = [
+  { name: '20 MB/s', net: 20e6, tolerance: 0.02, floor: 60e3 },
+  { name: '1.01 MB/s', net: 1.01e6, tolerance: 0.02, floor: 60e3 },
+];
+
+for (const stream of STREAMS) {
+  test(`the panel's network and disk lines agree with netstat and ioreg under a real transfer, ${stream.name}`,
+    async () => {
+      const panel = require('./support/panel');
+      const rates = require('./support/rates');
+      const os = require('node:os');
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'meter-transfer-'));
+      const MB = 1e6;
       try {
-        await procs.sleep(3500);
-        const net0 = probes.netstatBytes();
-        const disk0 = probes.ioregDiskBytes();
-        const t0 = Date.now();
-        const watcher = await panel.watchTexts(meter.pid, 4000);
-        await watcher.done;
-        const net1 = probes.netstatBytes();
-        const disk1 = probes.ioregDiskBytes();
-        const seconds = (Date.now() - t0) / 1000;
-        const probe = {
-          Net: [(net1.received - net0.received) / seconds, (net1.sent - net0.sent) / seconds],
-          Disk: [(disk1.read - disk0.read) / seconds, (disk1.written - disk0.written) / seconds],
-        };
-        for (const label of ['Net', 'Disk']) {
-          const read = watcher.seen.map((s) => lineRates(panel.lineStarting(s.texts, `${label} `), label))
-            .filter(Boolean);
-          assert.ok(read.length >= 3, `the ${label} line was read: ${JSON.stringify(watcher.seen.at(-1))}`);
-          for (const i of [0, 1]) {
-            const ours = mean(read.map((r) => r[i]));
-            const theirs = probe[label][i];
-            assert.ok(Math.abs(ours - theirs) <= 0.25 * theirs + 0.5 * MB,
-              `${label} ${i ? 'second' : 'first'} value: the panel reads ${(ours / MB).toFixed(2)} MB/s, `
-              + `the system counted ${(theirs / MB).toFixed(2)} MB/s`);
+        await withRealMeter({}, async (meter) => {
+          await panel.click(meter.pid);
+          // Loopback traffic (Activity Monitor counts lo0, as measured) and uncached disk reads and
+          // writes, each at a steady rate, for 10 s, in a temporary folder.
+          const transfer = procs.start('python3', ['-I', path.join(__dirname, 'support', 'transfer.py'),
+            '10', String(stream.net), String(8 * MB), String(6 * MB), dir]);
+          try {
+            await procs.sleep(3500);
+            const watcher = await panel.watchTexts(meter.pid, 4000);
+            // The counters are read as the watcher shows its first reading and as it ends, so
+            // the system's rates and the panel's mean span the same seconds.
+            const first = snapshot();
+            await watcher.done;
+            const last = snapshot();
+            const t0 = first.at;
+            const t1 = last.at;
+            const net0 = first.net;
+            const net1 = last.net;
+            const disk0 = first.disk;
+            const disk1 = last.disk;
+            const seconds = (t1 - t0) / 1000;
+            const probe = {
+              Net: [(net1.received - net0.received) / seconds, (net1.sent - net0.sent) / seconds],
+              Disk: [(disk1.read - disk0.read) / seconds, (disk1.written - disk0.written) / seconds],
+            };
+            for (const label of ['Net', 'Disk']) {
+              const texts = watcher.seen.map((s) => ({
+                at: s.at, pair: lineTexts(panel.lineStarting(s.texts, `${label} `), label) }));
+              const shown = texts.filter((t) => t.pair);
+              assert.ok(shown.length >= 3, `the ${label} line was read: ${JSON.stringify(watcher.seen.at(-1))}`);
+              // Every reading is written as the decimal reference writes its value.
+              for (const t of shown) {
+                for (const text of t.pair) {
+                  assert.ok(rates.canonical(text), `${label} reads "${text}", which the decimal step at a thousand writes ${rates.format(rates.parse(text))}`);
+                }
+              }
+              for (const i of [0, 1]) {
+                const ours = rates.weightedMean(
+                  texts.map((t) => ({ at: Math.max(t.at, t0), value: t.pair ? rates.parse(t.pair[i]) : null })), t1);
+                const theirs = probe[label][i];
+                const allowed = label === 'Net' ? stream.tolerance * theirs + stream.floor : 0.25 * theirs + 0.5 * MB;
+                assert.ok(Math.abs(ours - theirs) <= allowed,
+                  `${label} ${i ? 'second' : 'first'} value: the panel reads ${(ours / MB).toFixed(3)} MB/s, `
+                  + `the system counted ${(theirs / MB).toFixed(3)} MB/s`);
+              }
+            }
+            // The transfer itself shows: loopback counted, reads and writes counted.
+            assert.ok(probe.Net[0] >= 0.8 * stream.net && probe.Disk[0] >= 5 * MB && probe.Disk[1] >= 4 * MB,
+              `a non-idle transfer: ${JSON.stringify(probe)}`);
+          } finally {
+            await procs.end(transfer);
           }
-        }
-        // The transfer itself shows: loopback counted, reads and writes counted.
-        assert.ok(probe.Net[0] >= 15 * MB && probe.Disk[0] >= 5 * MB && probe.Disk[1] >= 4 * MB,
-          `a non-idle transfer: ${JSON.stringify(probe)}`);
+        });
       } finally {
-        await procs.end(transfer);
+        fs.rmSync(dir, { recursive: true, force: true });
       }
     });
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
+}

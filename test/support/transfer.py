@@ -89,7 +89,6 @@ def read():
     os.close(fd)
 
 
-ready = time.monotonic()
 threads = [threading.Thread(target=t) for t in (network, read, write)]
 for t in threads:
     t.start()
