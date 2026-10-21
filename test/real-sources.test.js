@@ -116,7 +116,7 @@ test('the panel\'s network and disk lines agree with netstat and ioreg under a r
         const net0 = probes.netstatBytes();
         const disk0 = probes.ioregDiskBytes();
         const t0 = Date.now();
-        const watcher = panel.watchTexts(meter.pid, 4000);
+        const watcher = await panel.watchTexts(meter.pid, 4000);
         await watcher.done;
         const net1 = probes.netstatBytes();
         const disk1 = probes.ioregDiskBytes();
@@ -128,7 +128,7 @@ test('the panel\'s network and disk lines agree with netstat and ioreg under a r
         for (const label of ['Net', 'Disk']) {
           const read = watcher.seen.map((s) => lineRates(panel.lineStarting(s.texts, `${label} `), label))
             .filter(Boolean);
-          assert.ok(read.length >= 5, `the ${label} line was read: ${JSON.stringify(watcher.seen.at(-1))}`);
+          assert.ok(read.length >= 3, `the ${label} line was read: ${JSON.stringify(watcher.seen.at(-1))}`);
           for (const i of [0, 1]) {
             const ours = mean(read.map((r) => r[i]));
             const theirs = probe[label][i];

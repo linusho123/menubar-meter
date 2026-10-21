@@ -273,7 +273,7 @@ module.exports = (reg) => {
   reg.define(/^no fresh (network|disk) reading arrives$/u, async (w, reading) => {
     const m = required(w.meter, 'meter');
     await panel.click(m.pid);
-    w.panelWatcher = panel.watchTexts(m.pid, 15000);
+    w.panelWatcher = await panel.watchTexts(m.pid, 15000);
     w.defer(() => w.panelWatcher.stop());
     const lines = () => new Set(w.panelWatcher.seen
       .map((s) => panel.lineStarting(s.texts, lineOf[reading])).filter(Boolean));

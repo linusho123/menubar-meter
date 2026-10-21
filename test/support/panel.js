@@ -236,38 +236,29 @@ function linePixels(capture) {
 }
 
 /** The panel's texts the user reads now, through Accessibility. */
-const textsNow = (pid) => panelWindow(pid).elements
-  .filter((e) => e.role === 'AXStaticText').map((e) => e.text);
+const textsNow = (pid) => ax(['texts', String(pid)]);
 
 /** The one text the user reads that starts with `prefix` ("Net ", "Disk "), or undefined. */
 const lineStarting = (textList, prefix) => textList.find((t) => typeof t === 'string' && t.startsWith(prefix));
 
 /**
- * Watches the open panel's texts through Accessibility until stopped (or `durationMs`):
- * `seen` holds `{ at, texts }` for each read.
+ * Watches the open panel's texts through Accessibility for `durationMs`: `seen` holds
+ * `{ at, texts }` each time they change, stamped by the watcher as it reads them.
  */
-function watchTexts(pid, durationMs) {
-  const { execFile } = require('node:child_process');
+async function watchTexts(pid, durationMs) {
+  const { spawn } = require('node:child_process');
+  const readline = require('node:readline');
+  const child = spawn(paths.meterAx, ['watch-texts', String(pid), String(durationMs)]);
   const seen = [];
-  let stopped = false;
-  const end = Date.now() + durationMs;
-  const done = (async () => {
-    while (!stopped && Date.now() < end) {
-      const at = Date.now();
-      const out = await new Promise((resolve) => {
-        execFile(paths.meterAx, ['windows', String(pid)], { encoding: 'utf8' },
-          (error, stdout) => resolve(error ? null : stdout));
-      });
-      if (out) {
-        const windows = JSON.parse(out);
-        if (windows.length === 1) {
-          seen.push({ at, texts: windows[0].elements.filter((e) => e.role === 'AXStaticText').map((e) => e.text) });
-        }
-      }
-      await sleep(40);
-    }
-  })();
-  return { seen, done, stop: () => { stopped = true; return done; } };
+  readline.createInterface({ input: child.stdout }).on('line', (line) => {
+    const tab = line.indexOf('\t');
+    seen.push({ at: Number(line.slice(0, tab)), texts: JSON.parse(line.slice(tab + 1)) });
+  });
+  const done = new Promise((resolve) => child.on('exit', resolve));
+  const deadline = Date.now() + 3000;
+  while (seen.length === 0 && Date.now() < deadline) await sleep(10);
+  if (seen.length === 0) throw new Error('the Accessibility watcher saw no panel');
+  return { seen, done, stop: () => child.kill('SIGTERM') };
 }
 
 module.exports = {
