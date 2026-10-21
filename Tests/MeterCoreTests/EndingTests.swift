@@ -273,3 +273,53 @@ struct SendTimeSystemTests {
     #expect(system.sent.isEmpty)
   }
 }
+
+@Suite("The state outlasts a missed sample, and the panel closing (Q1, S2)")
+struct OutlastsTests {
+  @Test("a task missing from one measured list but still running keeps Ending…, then Force Quit")
+  func missedSample() {
+    let system = FakeSignals()
+    let ender = TaskEnder(signals: system)
+    let task = system.run(700)
+    let other = system.run(701)
+    ender.click(task, now: 0)
+    ender.keep(only: [other])
+    #expect(ender.button(for: task, now: 1) == .ending)
+    #expect(ender.button(for: task, now: 5) == .forceQuit)
+    #expect(ender.click(task, now: 5) == .kill)
+    ender.keep(only: [other])
+    #expect(ender.button(for: task, now: 6) == .forceQuitSent)
+    #expect(system.requests == [.terminate, .kill])
+  }
+
+  @Test("a task that no longer runs, or runs under a new start time, loses its state")
+  func goneLosesState() {
+    let system = FakeSignals()
+    let ender = TaskEnder(signals: system)
+    let gone = system.run(700)
+    let replaced = system.run(701)
+    ender.click(gone, now: 0)
+    ender.click(replaced, now: 0)
+    system.exit(700)
+    system.run(701, started: 2000)
+    ender.keep(only: [])
+    #expect(ender.button(for: gone, now: 1) == .end)
+    #expect(ender.button(for: replaced, now: 1) == .end)
+  }
+
+  @Test("the ending state is the ender's, not the panel's: it survives a panel close and reopen")
+  func survivesPanelClose() {
+    let system = FakeSignals()
+    let ender = TaskEnder(signals: system)
+    let task = system.run(700)
+    ender.click(task, now: 0)
+    // The panel closes and reopens: only the pointer hold resets; the ender is never told.
+    var hold = PointerHold()
+    hold.reset()
+    #expect(ender.button(for: task, now: 2) == .ending)
+    #expect(ender.button(for: task, now: 6) == .forceQuit)
+    #expect(ender.click(task, now: 7) == .kill)
+    #expect(ender.button(for: task, now: 8) == .forceQuitSent)
+    #expect(system.requests == [.terminate, .kill])
+  }
+}

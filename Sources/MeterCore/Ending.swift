@@ -115,10 +115,14 @@ public final class TaskEnder {
     }
   }
 
-  /// Forgets every task not running now: a task that has gone takes its state with it (D40), and
-  /// a later task given its process id starts with none.
-  public func keep(only running: Set<TaskID>) {
-    endings = endings.filter { running.contains($0.key) }
+  /// Forgets every task that has gone: a task that has gone takes its state with it (D40), and a
+  /// later task given its process id starts with none. A task missing from `listed` (one
+  /// measured list) is gone only if the system no longer runs it, started at that moment: one
+  /// missed sample must not drop the state of a task still running.
+  public func keep(only listed: Set<TaskID>) {
+    endings = endings.filter { id, _ in
+      listed.contains(id) || signals.running(pid: id.pid)?.id == id
+    }
   }
 
   /// Whether anything may be sent to task `id` now: the task under its process id is the same
