@@ -233,10 +233,9 @@ final class PanelController {
   /// The user clicked the End, or Force Quit, button of the row showing `task`. No
   /// confirmation is asked (D60).
   private func end(_ task: TaskID) {
-    let result = ender.press(task, now: clock())
-    // The row showed a task that has gone or been replaced: nothing was sent, and the list is
-    // measured afresh at once rather than at the next pass.
-    if result == .stale, tasks.sample(now: clock()) { showList() }
+    // A row whose task has gone or been replaced sends nothing, and the list is measured afresh
+    // at once (PanelClick).
+    if PanelClick.end(task, ender: ender, sampler: tasks, now: clock()) { showList() }
     showButtons()
   }
 
