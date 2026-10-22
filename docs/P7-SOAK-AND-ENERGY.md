@@ -15,13 +15,24 @@ reports hold only what macOS's own tools read of the installed meter (`ps`, `foo
 `pmset`, the battery menu's texts), never anything the meter wrote. Neither check touches the
 meter: nothing signals, restarts, moves or reinstalls it.
 
-Start both after P7 is merged, on your word. Nothing has been started yet.
+Both reports are held to **the P7 build**: version `0.7.0` (`app/Info.plist`), the meter you
+install in step 0. A report taken with an older meter fails its row ("not the P7 build"). Start
+both after P7 is merged, on your word. Nothing has been started yet.
+
+The rulings of 2026-10-22 these checks follow:
+
+- Q2: "the 7-day memory row by a background soak; the row stays wip until it reports."
+- Q3: "energy by the harness reading the battery menu through AX after an all-day run on battery."
+- "All day" is at least **6 awake hours** on battery with the meter running (sleep taken out, using
+  pmset's own sleep and wake lines from the whole log).
+- The 7 days count the meter's **own uptime**: one continuous process (same pid and start time); a
+  restart resets the count.
 
 ## What runs when
 
 | When | What | Who |
 | --- | --- | --- |
-| Day 0 | Log in (the meter starts by its login item) and start the soak | you, one command |
+| Day 0 | Install the P7 package (step 0), check the running meter is the new one, start the soak | you, a few commands |
 | Days 0 to 7 | The soak reads the meter every 10 minutes; use the Mac normally, plugged in or not | the soak, by itself |
 | One day in the week | Use the Mac all day on battery, then run the battery-menu check before plugging in | you, one command |
 | Day 7 or later | The soak writes its report and stops reading | the soak, by itself |
@@ -33,9 +44,43 @@ soak's seven days). Restarting the Mac, or a crash that the keep-alive relaunche
 the seven days over: the soak counts from the running meter's own start time and waits for one
 process seven days old. Sleep is fine; the meter keeps running through it.
 
+**What makes a soak report pass.** The report holds every reading from the process's first one to
+its seven-day one. It must show: one process (pid and start time) throughout, the installed
+`0.7.0` meter with one executable (sha) throughout, at least 7 days old by its own start time, every
+reading under 50.0 MB (the highest one, not only day 7's), no growth of more than 5 MB from the
+first day's highest reading to the last day's, the meter's CPU time advancing while the Mac is
+awake and its state never stopped, and **no awake gap over 20 minutes** between readings (time the
+Mac slept, from `kern.sleeptime` and `kern.waketime`, is not a gap). A line saying the meter
+wasn't running, or one saying the soak couldn't read it (`{"error": …}`), inside the week shows a
+restart or a hole. The share of the week the Mac was awake is reported, not required.
+
+## 0. Install the P7 package first (day 0, before the soak)
+
+The soak must watch the P7 build, so install it before starting. An agent never touches
+`/Applications/Meter.app`; you install it:
+
+```sh
+cd ~/gitrepos/menubar-meter
+npm run build:app             # builds build/Meter.app and build/Meter.pkg
+open build/Meter.pkg          # you run the installer
+plutil -extract CFBundleShortVersionString raw /Applications/Meter.app/Contents/Info.plist
+```
+
+The last command must print `0.7.0`. Then make sure the running meter is the new one: log out and
+in, or open `/Applications/Meter.app`. Check that it started after the install:
+
+```sh
+ps -o lstart=,comm= -p $(pgrep -f /Applications/Meter.app/Contents/MacOS/Meter)
+```
+
+Only then start the soak (step 1). Before any `npm test` later, click **Quit Meter** in the
+installed meter's panel (the harness refuses to run beside it).
+
 ## 1. Start the soak (day 0)
 
-After a log-in, check that the meter is in the menu bar, then:
+With the P7 meter in the menu bar (step 0), start the soak. `soak-start.sh` refuses if
+`/Applications/Meter.app` is missing or not the P7 version, and running it a second time replaces
+the loaded job instead of failing:
 
 ```sh
 cd ~/gitrepos/menubar-meter
@@ -47,21 +92,25 @@ This copies `soak.sh` to `~/Library/Logs/menubar-meter-checks/` and loads a user
 macOS may show a "Background Items Added" notification for it; that is this agent.
 
 Each run appends one line to `~/Library/Logs/menubar-meter-checks/soak.ndjson`: the meter's pid
-and start time (`ps -o lstart`), its CPU time (`ps -o time`), and its physical footprint in bytes
-(`footprint -f bytes --noCategories`, the `phys_footprint` figure that Activity Monitor's Memory
-column shows). To look at it now and then:
+and start time (`ps -o lstart`), its state and CPU time (`ps -o stat,time`), its physical footprint
+in bytes (`footprint -f bytes --noCategories`, the `phys_footprint` figure that Activity Monitor's
+Memory column shows), its version and the sha of its executable, and the Mac's last sleep and
+wake (`kern.sleeptime`, `kern.waketime`). To look at it now and then:
 
 ```sh
 tail -3 ~/Library/Logs/menubar-meter-checks/soak.ndjson
 ```
 
-A line `{"at":…,"program":null}` means the installed meter wasn't running at that moment.
+A line `{"at":…,"program":null}` means the installed meter wasn't running at that moment, and
+`{"at":…,"error":"…"}` that the soak couldn't take a reading; neither is silent, and either one
+inside the week fails the report.
 
 ## 2. The battery-menu check (one day on battery)
 
-Unplug in the morning with the meter running, and use the Mac on battery all day as you normally
-would. "All day" is taken as at least **6 hours** on battery (question 1 below). At the end of the
-day, **before plugging in**, with the screen unlocked and no menu open:
+Unplug in the morning with the P7 meter running (step 0), and use the Mac on battery all day as you
+normally would. "All day" is at least **6 awake hours** on battery: the hours on battery less the
+time the Mac slept, read from the whole of `pmset -g log` (the report shows both figures). At the
+end of the day, **before plugging in**, with the screen unlocked and no menu open:
 
 ```sh
 cd ~/gitrepos/menubar-meter
@@ -69,11 +118,20 @@ swift build -c release --product meter-ax
 node scripts/checks/energy-check.js
 ```
 
-It checks that the Mac is on battery and the installed meter is running, opens the battery menu
-in the menu bar (an Accessibility press, as an assistive app presses it; the pointer doesn't
-move), reads every text in it, closes it, and writes
-`~/Library/Logs/menubar-meter-checks/energy-report.json`. You will see the battery menu open and
-close. It prints what the menu listed. If it says the Mac is not on battery, it wrote nothing.
+It checks that the Mac is on battery and the installed meter is running, starts a **positive
+control** (a stand-in app of the harness's own, named `EnergyControl`, busy on two cores; it ends
+it by its pid and start time when done), then opens the battery menu in the menu bar (an
+Accessibility press, as an assistive app presses it; the pointer doesn't move), reads every element
+in it and closes it, repeating every 20 seconds for up to 5 minutes until the control is listed
+under *Using Significant Energy*. It also reads the meter's state, CPU time (twice, 10 seconds
+apart) and status item. It writes `~/Library/Logs/menubar-meter-checks/energy-report.json`. You
+will see the battery menu open and close a few times. If it says the Mac is not on battery, it
+wrote nothing.
+
+**If it says the control was never listed**, macOS didn't call the control significant in those
+5 minutes, and a menu that lists nothing proves nothing: run it again later in the day. A report
+whose menu can't be read (no energy section, or a section with no readable app) fails, and says
+"unreadable", which is not the same as the meter being listed.
 
 The terminal you run it from needs Accessibility permission (the same one the test harness uses).
 
@@ -98,12 +156,13 @@ sh scripts/checks/soak-stop.sh
 
 Tell a build session that both reports are in `~/Library/Logs/menubar-meter-checks/`. It will:
 
-1. click **Quit Meter** in the installed meter's panel (the harness refuses to run beside it),
-   then run the gate (`caffeinate -i npm test`, plugged in, lid open);
-2. with the reports present, the 7-day row and the energy scenario bind and run: the 7-day Then
-   reads the soak's reading at seven days or later in Activity Monitor's units (megabytes of
-   1,048,576 bytes, one decimal, under 50.0 MB); the energy Then reads the battery menu's texts
-   and fails if `Meter` is listed under *Apps Using Significant Energy*;
+1. click **Quit Meter** in the installed meter's panel (the harness refuses to run beside it; do
+   this before any `npm test`), then run the gate (`caffeinate -i npm test`, plugged in, lid open);
+2. with the reports present, the 7-day row and the energy scenario bind and run: the 7-day row
+   judges the whole week of one process (above) in Activity Monitor's units (megabytes of
+   1,048,576 bytes, one decimal, under 50.0 MB) and shows the highest and the day-7 readings; the
+   energy scenario reads the battery menu's elements and fails if the exact name `Meter` is listed
+   under *Using Significant Energy*, if the menu can't be read, or if the control wasn't listed;
 3. if both pass, the suite then fails once on purpose with a "wip entry fully bound" message: that
    is the ratchet asking for the `own-cost` entry to be removed from the register in
    `test/features.test.js`. Removing it leaves the register empty;
@@ -111,10 +170,3 @@ Tell a build session that both reports are in `~/Library/Logs/menubar-meter-chec
 
 If either report fails its row, the gate shows the readings: the soak's footprint at seven days,
 or the apps the battery menu listed.
-
-## Questions put to you
-
-1. Is "all day" on battery at least 6 hours, read from `pmset`'s log of the switch to battery?
-2. The soak's seven days count from the running meter's own start time (`ps`), not from when the
-   soak started, so a meter running since a log-in two days before the soak starts reports after
-   five more days. Is that what you want, or should the week be counted from the soak's start?

@@ -144,3 +144,51 @@ test('the reports\' times read as the system writes them', () => {
   assert.strictEqual(checks.lstartSeconds('Thu Oct  2 00:42:30 2026'), local);
   assert.strictEqual(checks.lstartSeconds('Thu Oct 2 00:42:30 2026'), local);
 });
+
+// --- S5: soak-start.sh is idempotent, and refuses a missing or older install ---------------
+
+const startScript = path.join(paths.root, 'scripts', 'checks', 'soak-start.sh');
+const stopScript = path.join(paths.root, 'scripts', 'checks', 'soak-stop.sh');
+
+function soakStart(home, env) {
+  return spawnSync('/bin/sh', [startScript], { encoding: 'utf8', env: { PATH: process.env.PATH, HOME: home, ...env } });
+}
+
+test('soak-start refuses when the installed meter is missing or not the P7 build, and loads nothing', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'meter-soakstart-'));
+  const label = 'local.menubar-meter.soaktest-refuse';
+  try {
+    const missing = soakStart(home, { METER_SOAK_APP: path.join(home, 'Meter.app'), METER_SOAK_LABEL: label });
+    assert.notStrictEqual(missing.status, 0);
+    assert.match(missing.stderr, /not installed/);
+    const old = path.join(home, 'Old.app');
+    fs.mkdirSync(path.join(old, 'Contents'), { recursive: true });
+    fs.writeFileSync(path.join(old, 'Contents', 'Info.plist'), fs.readFileSync(path.join(paths.root, 'app', 'Info.plist'), 'utf8').replace(appVersion(), '0.1.0'));
+    const older = soakStart(home, { METER_SOAK_APP: old, METER_SOAK_LABEL: label });
+    assert.notStrictEqual(older.status, 0);
+    assert.match(older.stderr, /not the P7 build/);
+    assert.ok(!fs.existsSync(path.join(home, 'Library', 'LaunchAgents', `${label}.plist`)), 'no agent written');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('soak-start twice does not fail, writes a valid plist, and soak-stop takes it away', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'meter-soakstart-'));
+  const label = 'local.menubar-meter.soaktest-twice';
+  const env = { METER_SOAK_APP: path.join(paths.root, 'build', 'Meter.app'), METER_SOAK_LABEL: label };
+  try {
+    const first = soakStart(home, env);
+    assert.strictEqual(first.status, 0, first.stderr);
+    const plist = path.join(home, 'Library', 'LaunchAgents', `${label}.plist`);
+    execFileSync('plutil', ['-lint', plist]);
+    const second = soakStart(home, env);
+    assert.strictEqual(second.status, 0, `a second start: ${second.stderr}`);
+    execFileSync('launchctl', ['print', `gui/${process.getuid()}/${label}`], { stdio: 'ignore' });
+  } finally {
+    spawnSync('/bin/sh', [stopScript], { encoding: 'utf8', env: { PATH: process.env.PATH, HOME: home, ...env } });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+  const gone = spawnSync('launchctl', ['print', `gui/${process.getuid()}/${label}`], { stdio: 'ignore' });
+  assert.notStrictEqual(gone.status, 0, 'the test agent is unloaded');
+});
