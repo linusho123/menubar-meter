@@ -90,7 +90,7 @@ Feature: Heavy tasks
     When the user opens the panel
     Then the user sees Safari's row read "12.3%" under GPU
 
-  @D99
+  @D118
   Scenario Outline: A macOS or other-user task is listed as system with no End
     Given <task>, whose program <where>, is among the top five by CPU
     When the user opens the panel
@@ -104,7 +104,7 @@ Feature: Heavy tasks
       | WindowServer | runs as _windowserver, not as the user       |
       | kernel_task  | runs as root, not as the user                |
 
-  @D99
+  @D118
   Scenario: The user's own tasks outside /System keep their End button
     Given node, run as the user from ~/.nvm, and Xcode, run as the user from /Applications, are in the heavy-tasks list
     When the user opens the panel

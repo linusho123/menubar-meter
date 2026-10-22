@@ -1012,3 +1012,18 @@ D117 2026-10-21 [I>V] amends D95
   touches: D95 D114 D85 D50
 # evidence: P5 builder's measurement on this Mac (branch p5-network-disk, commit 07c107b's DESIGN lines): Activity Monitor's totals are decimal (80.28 GB = 80,282 million bytes), and its packet totals equal the sum of every `netstat -ib` link row, loopback included
 # roads not taken: stepping from KB/s to MB/s at 300 KB so the 0.3 MB/s mockup holds; leaving loopback and virtual interfaces out of the network value
+
+D118 2026-10-21 [I>V] ! amends D99
+  pre:   a task that is part of macOS itself, such as `loginwindow`, `Dock`, `Finder` or `trustd`, or one not running as the visionary's own user, such as `WindowServer` or `kernel_task`, is among the top five by CPU [I>V]
+  trig:  the visionary opens the panel [I>V]
+  resp:  the task is listed in its CPU rank and counts toward the five rows, marked `system`, with no `End` button, whoever it runs as; a task is part of macOS itself when its program lives in macOS's own `/System` folders or in `/usr/libexec`, `/usr/sbin` or `/sbin`, where macOS keeps its services, or when no absolute program path can be read for it; the apps in Apple's App cryptex, such as Safari and the helpers inside its app, count as the visionary's own apps and keep their `End` button, while the cryptex's other programs stay `system`; every other task running as the visionary keeps its `End` button, `node`, Xcode and the commands in `/bin` and `/usr/bin` included [I>V]
+  why:   during the P3 build `ps` showed macOS services such as `trustd`, `cfprefsd` and `UserEventAgent` running as the visionary from `/usr/libexec`, `/usr/sbin` and `/sbin`, outside `/System`, and Safari's program resolving into `/System` through Apple's App cryptex; the visionary ruled from options to widen the folders, to keep End for apps inside the cryptex only, and that a task whose program cannot be named fails safe as `system` [I>V]
+  sib:   D57
+  serves: N1
+  touches: D99 D57 D61 D60
+# evidence: P3 review B and verifier (2026-10-20): `ps -axo user,comm` shows trustd, cfprefsd, usernoted and UserEventAgent under /usr/libexec, /usr/sbin and /sbin as linus; Safari's proc_pidpath is /System/Volumes/Preboot/Cryptexes/App/System/Applications/Safari.app/Contents/MacOS/Safari; built in P3 (commits b767a09, f01a739)
+# roads not taken: keeping D99 as worded, /System alone; the whole read-only system volume, which takes End from zsh and git; leaving Safari without End; End for everything in the App cryptex, its background agents included; End for Safari's main program only
+
+D119 2026-10-21 [V] signs D118
+  resp:  the visionary read the two amendments since the last signature, D117 and D118, and signs the contract as of this entry [V]
+  touches: D118

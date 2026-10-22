@@ -53,7 +53,7 @@ None.
 - **bar-rounding.** Rejected: rounding down; rounding to nearest but never zero while busy. Nearest won. (D21, D46, 2026-10-18)
 - **short-history.** Rejected: stretching the graph to the history it has. A fixed axis with an empty left won. (D22, D51, 2026-10-18)
 - **sleep-gap.** Rejected: joining the line across the sleep; starting over on wake. A gap won. (D23, D52, 2026-10-18)
-- **system-tasks.** Rejected: hiding system tasks; End with a warning and an admin password; a short named list of session-ending tasks; keeping the first not-the-user's-own rule alone. Anything of macOS or not the user's own is listed with no End. (D24, D56, D99, 2026-10-18)
+- **system-tasks.** Rejected: hiding system tasks; End with a warning and an admin password; a short named list of session-ending tasks; keeping the first not-the-user's-own rule alone; `/System` alone; the whole read-only system volume; leaving Safari without End; End for everything in the App cryptex; End for Safari's main program only. Anything of macOS (its `/System` folders, `/usr/libexec`, `/usr/sbin`, `/sbin`, or no nameable program) or not the user's own is listed with no End, except the apps in Apple's App cryptex. (D24, D56, D99 amended by D118, 2026-10-21)
 - **live-reorder.** Rejected: freezing the order under the pointer; a snapshot when the panel opens; naming the task after the click. Live, holding only the row whose End is under the pointer, won. (D25, D100, 2026-10-18)
 - **ram-meaning.** Rejected: everything not free, cache included; memory pressure. Activity Monitor's Memory Used won. (D26, D47, 2026-10-18)
 - **gpu-meaning.** Rejected: the sum of Activity Monitor's per-task % GPU column. macOS's own reading won. (D28, D49, 2026-10-18)
@@ -77,3 +77,4 @@ None.
 ## Sanctioned changes
 
 - `network-and-disk.feature` — "Network and disk match Activity Monitor" — direction: rewords — the busy row's sent value 0.3 MB becomes 300 KB and its network line `Net ↓ 112.4 MB/s ↑ 0.3 MB/s` becomes `Net ↓ 112.4 MB/s ↑ 300.0 KB/s`; the scenario's tag @D95 becomes @D117. (D117, 2026-10-21)
+- `heavy-tasks.feature` — "A macOS or other-user task is listed as system with no End" and "The user's own tasks outside /System keep their End button" — direction: rewords — each scenario's tag @D99 becomes @D118; the steps and rows are unchanged, and the widened folders and the App-cryptex apps are pinned by the unit tests built in P3. (D118, 2026-10-21)

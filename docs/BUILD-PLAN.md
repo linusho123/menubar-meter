@@ -109,7 +109,7 @@ inherits the session's model.
 These scenarios cannot be fully driven by an automated test on this Mac.
 Each needs a ruling on how it counts as bound; until then it stays in `wip`.
 
-- **Q1 (P6) — real logins.** "appears by itself at login" (D42) and the
+- **Q1 (P6) — real logins. Ruled 2026-10-21: the registry plus one manual log-in check (the first option).** "appears by itself at login" (D42) and the
   "at the next login" steps of D83, D84 and D104 need a real log-out and
   log-in. Options: bind them to macOS's own login-item registry (it lists
   the meter as enabled) plus one manual log-in check by the visionary
@@ -335,6 +335,7 @@ instead of ⌃⌥⌘M, history kept across a crash, an update prompt.
 **Rulings:** D73 (under 1% closed, under 5% open), D76 (under 50 MB after an
 hour and after seven days), D75 (never an energy hog).
 **Needs first:** the visionary's answers to **Q2** and **Q3**.
+**Carried in:** a test pinning the sampler's clock across sleep (a reading spanning a sleep comes out low, never huge; deferred from P5's head review), and pruning ending states for tasks gone while the panel is closed (deferred from P4's head review).
 **Builds:** nothing new unless the measurements fail; then optimisation
 inside the lines, never by sampling less often than the contract demands.
 **Far-side checks:** `top`/`ps` CPU time of the meter's process over a
