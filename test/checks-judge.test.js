@@ -115,3 +115,7 @@ test('judgeSoak: error lines are kept visible and do not hide a hole', () => {
   assert.match(all(r), /gap/);
   assert.strictEqual(r.stats.errors, 1);
 });
+
+test('the build ships as the P7 version the reports are held to (0.7.0)', () => {
+  assert.strictEqual(checks.appVersion(), '0.7.0');
+});

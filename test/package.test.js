@@ -10,6 +10,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const paths = require('./support/paths');
+const checks = require('./support/checks');
 
 const RELEASE_ID = 'local.menubar-meter.Meter';
 
@@ -41,7 +42,7 @@ function expand(pkg) {
 }
 
 for (const [pkg, version] of [
-  [path.join(paths.root, 'build', 'Meter.pkg'), '0.1.0'],
+  [path.join(paths.root, 'build', 'Meter.pkg'), checks.appVersion()],
   [path.join(paths.root, 'build', 'check', 'Meter-0.0.9.pkg'), '0.0.9'],
 ]) {
   test(`${path.relative(paths.root, pkg)} is the one install step for the whole Mac, version ${version}`, () => {
