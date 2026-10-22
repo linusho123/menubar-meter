@@ -108,17 +108,35 @@ module.exports = (reg) => {
     const m = await meter.launchReal(w);
     assertReleaseBuild(m.pid);
     keepAwake(w, m.pid);
-    // An hour of normal use: the panel opened for a minute every ten minutes, the meter's
-    // memory read every minute.
+    // An hour of normal use: the panel opened for a minute every ten minutes, the meter read every
+    // minute (memory, state, CPU time, Accessibility). METER_HOUR_SECONDS shortens the hour (and
+    // every window with it) for checking the row itself; the gate runs the whole hour.
+    const hourMs = (Number(process.env.METER_HOUR_SECONDS) || 3600) * 1000;
+    const unit = hourMs / 60;
     const start = Date.now();
-    const hour = 3600 * 1000;
-    w.memoryLog = [];
-    for (let minute = 0; Date.now() - start < hour; minute++) {
-      if (minute % 10 === 5) await panel.click(m.pid);
-      if (minute % 10 === 6) await closePanel(m.pid);
-      w.memoryLog.push(cost.memory(m.pid).shown);
-      const due = start + (minute + 1) * 60000;
-      if (due - Date.now() > 0) await procs.sleep(Math.min(due, start + hour) - Date.now());
+    w.memorySamples = [];
+    w.hourMs = hourMs;
+    const sample = (panelState) => {
+      const { stat, time } = cost.psStatTime(m.pid);
+      w.memorySamples.push({
+        at: Date.now(), bytes: cost.memory(m.pid).bytes, panel: panelState, stat, cpu: cost.cpuSeconds(time), ax: cost.axAlive(m.pid),
+      });
+    };
+    for (let minute = 0; Date.now() - start < hourMs; minute++) {
+      const due = start + minute * unit;
+      if (due > Date.now()) await procs.sleep(due - Date.now());
+      if (minute % 10 === 5) {
+        await panel.click(m.pid);
+        // Read with the panel open 10 s after the click, not at the instant of it.
+        await procs.sleep(Math.min(10000, unit / 2));
+        sample('open');
+      } else if (minute % 10 === 6) {
+        // And again just before it is closed.
+        sample('open');
+        await closePanel(m.pid);
+      } else {
+        sample('closed');
+      }
       assert.ok(procs.isRunning(m), 'the meter ran the whole hour without a restart');
     }
     w.ranFor = `${((Date.now() - start) / 60000).toFixed(1)} minutes`;
@@ -132,8 +150,8 @@ module.exports = (reg) => {
       return;
     }
     const m = required(w.hourMeter, 'hourMeter');
-    // The value the user sees with the panel open (opened from the panel's own Open Activity
-    // Monitor… row, it stays open) and with it closed: both must be under the line.
+    // The value the user sees with the panel open (opened with a click on the status item) and
+    // with it closed: both must be under the line.
     await panel.click(m.pid);
     await procs.sleep(2000);
     w.looked = [{ panel: 'open', ...cost.memory(m.pid) }];
@@ -147,7 +165,13 @@ module.exports = (reg) => {
     if (time === '7 days') required(w.soak, 'soak');
     else required(w.hourMeter, 'hourMeter');
     const said = looked.map((l) => `${l.shown} (${l.bytes} bytes, panel ${l.panel})`).join('; ');
-    const history = w.memoryLog ? `; over the ${w.ranFor}: ${w.memoryLog.join(', ')}` : '';
+    let history = '';
+    if (time === '1 hour') {
+      // Every reading of the hour is judged, not only the end ones.
+      const hour = cost.judgeHour(required(w.memorySamples, 'memorySamples'), { hourMs: w.hourMs });
+      history = `; over the ${w.ranFor}: highest ${hour.max}, first ${hour.first}, last ${hour.last}`;
+      assert.deepStrictEqual(hour.problems, [], `the hour's readings${history}`);
+    }
     for (const l of looked) {
       assert.ok(l.under50, `Activity Monitor's Memory for the meter after ${time}: ${said}${history}`);
     }

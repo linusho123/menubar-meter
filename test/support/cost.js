@@ -81,6 +81,59 @@ function axAlive(pid) {
   }
 }
 
+const MB = 1048576;
+/** A footprint as Activity Monitor's Memory column shows it: megabytes of 1,048,576 bytes, one decimal. */
+const shownMB = (bytes) => `${(Math.round((bytes / MB) * 10) / 10).toFixed(1)} MB`;
+const underLine = (bytes, megabytes = 50) => Number(shownMB(bytes).replace(' MB', '')) < megabytes;
+const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+
+/**
+ * Judges the memory hour: `samples` are { at (ms), bytes, panel ('open'|'closed'), stat, cpu (s),
+ * ax (whether Accessibility answered) }, oldest first, over `hourMs`. Every sample must be shown
+ * under 50.0 MB (not just the end readings), the closed-panel readings of the last ten minutes must
+ * be no more than 5 MB above those of minutes 2 to 11 (no sustained growth), no two samples may be
+ * more than 1.5 sample intervals (90 s) apart, and the meter must be alive at every sample (state,
+ * CPU time advancing, Accessibility answering). Returns { problems, max, first, last }.
+ */
+function judgeHour(samples, { hourMs = 3600 * 1000 } = {}) {
+  const problems = [];
+  if (samples.length < 2) return { problems: ['fewer than two samples'], max: null };
+  const unit = hourMs / 60;
+  const start = samples[0].at;
+  const maxBytes = Math.max(...samples.map((s) => s.bytes));
+  const max = shownMB(maxBytes);
+  const over = samples.filter((s) => !underLine(s.bytes));
+  if (over.length) {
+    problems.push(`${over.length} reading(s) at or over 50.0 MB, the highest ${max} (at minute ${(((over[0].at - start) / unit)).toFixed(0)}, panel ${over[0].panel})`);
+  }
+  const closed = (from, to) => samples.filter((s) => s.panel === 'closed' && s.at - start >= from * unit && s.at - start < to * unit).map((s) => s.bytes);
+  const early = closed(2, 12);
+  const late = closed(50, 61);
+  if (!early.length || !late.length) {
+    problems.push('no closed-panel readings in minutes 2 to 11 or 50 to 59: growth cannot be judged');
+  } else if (mean(late) - mean(early) > 5 * MB) {
+    problems.push(`memory grew: the closed-panel mean was ${shownMB(mean(early))} in minutes 2 to 11 and ${shownMB(mean(late))} in minutes 50 to 59 (more than 5 MB up)`);
+  }
+  for (let i = 1; i < samples.length; i++) {
+    if (samples[i].at - samples[i - 1].at > 1.5 * unit) {
+      problems.push(`gap of ${((samples[i].at - samples[i - 1].at) / 1000).toFixed(0)} s between samples at minute ${((samples[i - 1].at - start) / unit).toFixed(0)} (more than ${(1.5 * unit / 1000).toFixed(0)} s)`);
+      break;
+    }
+  }
+  if (samples.at(-1).at - start < hourMs - 1.5 * unit) problems.push('the samples stop before the hour is out');
+  const dead = samples.find((s) => /^[TZ]/.test(s.stat));
+  if (dead) problems.push(`the meter was in state ${dead.stat} at minute ${((dead.at - start) / unit).toFixed(0)}`);
+  const silent = samples.find((s) => s.ax === false);
+  if (silent) problems.push(`the meter did not answer Accessibility at minute ${((silent.at - start) / unit).toFixed(0)}`);
+  for (let i = 1; i < samples.length; i++) {
+    if (samples[i].cpu - samples[i - 1].cpu < MIN_ADVANCE) {
+      problems.push(`its CPU time did not advance between minute ${((samples[i - 1].at - start) / unit).toFixed(0)} and ${((samples[i].at - start) / unit).toFixed(0)}: a stopped or hung meter`);
+      break;
+    }
+  }
+  return { problems, max, first: shownMB(samples[0].bytes), last: shownMB(samples.at(-1).bytes) };
+}
+
 /**
  * Samples the process's CPU time once a second for `seconds`, then works out its CPU use as a
  * share of the whole Mac: { mean, peak, seconds, samples }. `stillOk(pid)` is checked at every
@@ -116,4 +169,4 @@ function memory(pid) {
   return JSON.parse(run(paths.meterCost, ['footprint'], out));
 }
 
-module.exports = { cpuOver, memory, psTime, psStatTime, cpuSeconds, liveness, axAlive };
+module.exports = { cpuOver, memory, psTime, psStatTime, cpuSeconds, liveness, axAlive, judgeHour, shownMB, underLine };

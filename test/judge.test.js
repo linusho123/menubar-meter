@@ -41,3 +41,55 @@ test('ps CPU time text reads as seconds', () => {
   assert.strictEqual(cost.cpuSeconds('12:05'), 725);
   assert.throws(() => cost.cpuSeconds('nonsense'));
 });
+
+// --- F2: the hour judges every sample ---------------------------------------------------
+
+const MB = 1048576;
+/** One closed-panel sample a minute for an hour (open at minutes 5, 6 of every ten), at `mb(minute)` MB. */
+function hour(mb, { skip = () => false } = {}) {
+  const out = [];
+  for (let m = 0; m < 60; m++) {
+    if (skip(m)) continue;
+    const open = m % 10 === 5 || m % 10 === 6;
+    out.push({ at: t0 + m * 60000, bytes: Math.round(mb(m) * MB), panel: open ? 'open' : 'closed', stat: 'S', cpu: m * 0.5, ax: true });
+  }
+  return out;
+}
+
+test('judgeHour: a steady 20 MB hour passes and prints its max', () => {
+  const r = cost.judgeHour(hour(() => 20));
+  assert.deepStrictEqual(r.problems, []);
+  assert.strictEqual(r.max, '20.0 MB');
+});
+
+test('judgeHour: one 69 MB sample mid-hour fails even if the end readings are 21 and 18 MB (P5)', () => {
+  const r = cost.judgeHour(hour((m) => (m === 30 ? 69 : 18)));
+  assert.match(r.problems.join('; '), /69\.0 MB/);
+});
+
+test('judgeHour: a steady climb of 0.2 MB a minute fails (sustained growth)', () => {
+  const r = cost.judgeHour(hour((m) => 20 + 0.2 * m));
+  assert.match(r.problems.join('; '), /grew|growth/);
+});
+
+test('judgeHour: an 8-minute hole between samples fails', () => {
+  const r = cost.judgeHour(hour(() => 20, { skip: (m) => m >= 20 && m < 28 }));
+  assert.match(r.problems.join('; '), /gap/);
+});
+
+test('judgeHour: a frozen meter (CPU time not advancing, or Accessibility not answering) fails', () => {
+  const frozen = hour(() => 20).map((s) => ({ ...s, cpu: 5 }));
+  assert.match(cost.judgeHour(frozen).problems.join('; '), /CPU time/);
+  const silent = hour(() => 20);
+  silent[30].ax = false;
+  assert.match(cost.judgeHour(silent).problems.join('; '), /Accessibility/);
+  const stopped = hour(() => 20);
+  stopped[12].stat = 'T';
+  assert.match(cost.judgeHour(stopped).problems.join('; '), /state T/);
+});
+
+test('judgeHour: a shortened hour scales the windows with it', () => {
+  const unit = 2000;
+  const short = Array.from({ length: 60 }, (_, m) => ({ at: t0 + m * unit, bytes: 20 * MB, panel: 'closed', stat: 'S', cpu: m, ax: true }));
+  assert.deepStrictEqual(cost.judgeHour(short, { hourMs: 60 * unit }).problems, []);
+});
