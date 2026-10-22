@@ -37,7 +37,7 @@ sh scripts/build-pkg.sh build/Meter.app build/Meter.pkg
 # The harness's packages: the release program under its own identifier (never the installed
 # meter's), an older and a newer version, installed only into the user's home folder. Their
 # bundles are made in a temporary folder and removed, so no second copy is left about.
-pkgtest=local.menubar-meter.Meter.pkgtest
+pkgtest=local.menubar-meter.Meter.presencetest
 rm -rf build/test/pkg
 mkdir -p build/test/pkg
 staging=$(mktemp -d)
@@ -67,5 +67,18 @@ cat >"$standin/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 codesign --force --sign - "$standin" >/dev/null 2>&1
+
+# The front-app stand-in: the same program as a regular app, the app in front while the
+# shortcut is pressed (in place of Safari, so the user's own browser is never touched).
+front=build/test/standins/Front.app
+rm -rf "$front"
+mkdir -p "$front/Contents/MacOS"
+cp .build/release/meter-standin "$front/Contents/MacOS/Front"
+cp "$standin/Contents/Info.plist" "$front/Contents/Info.plist"
+plutil -replace CFBundleExecutable -string Front "$front/Contents/Info.plist"
+plutil -replace CFBundleIdentifier -string local.menubar-meter.standin.front "$front/Contents/Info.plist"
+plutil -replace CFBundleName -string Front "$front/Contents/Info.plist"
+plutil -replace LSUIElement -bool NO "$front/Contents/Info.plist"
+codesign --force --sign - "$front" >/dev/null 2>&1
 
 echo "built build/Meter.app, build/Meter.pkg and build/test/Meter.app"

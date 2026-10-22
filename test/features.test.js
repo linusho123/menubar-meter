@@ -10,9 +10,9 @@ runFeatures(paths.features, {
   'heavy-tasks': require('./steps/heavy-tasks.steps'),
   'ending-tasks': require('./steps/ending-tasks.steps'),
   'network-and-disk': require('./steps/network-and-disk.steps'),
+  presence: require('./steps/presence.steps'),
 }, {
   wip: [
-    'presence',
     'own-cost',
   ],
   manifest: path.join(paths.root, 'run-manifest.ndjson'),
