@@ -1,0 +1,47 @@
+[
+ {
+  "title": "Control Center",
+  "elements": [
+   {
+    "role": "AXStaticText",
+    "subrole": "",
+    "text": "Battery"
+   },
+   {
+    "role": "AXStaticText",
+    "subrole": "",
+    "text": "80%"
+   },
+   {
+    "role": "AXStaticText",
+    "subrole": "",
+    "text": "Power Source: Battery"
+   },
+   {
+    "role": "AXHeading",
+    "subrole": "",
+    "text": "Energy Mode"
+   },
+   {
+    "role": "AXCheckBox",
+    "subrole": "AXToggle",
+    "text": "Low Power"
+   },
+   {
+    "role": "AXHeading",
+    "subrole": "",
+    "text": "Using Significant Energy"
+   },
+   {
+    "role": "AXButton",
+    "subrole": "",
+    "text": "Meter Pro"
+   },
+   {
+    "role": "AXButton",
+    "subrole": "",
+    "text": "Battery Settings…"
+   }
+  ]
+ }
+]

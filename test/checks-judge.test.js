@@ -119,3 +119,144 @@ test('judgeSoak: error lines are kept visible and do not hide a hole', () => {
 test('the build ships as the P7 version the reports are held to (0.7.0)', () => {
   assert.strictEqual(checks.appVersion(), '0.7.0');
 });
+
+// --- F4: the energy read sees a listed app, and an unreadable menu is unreadable ----------
+
+const fs = require('node:fs');
+const path = require('node:path');
+const fixture = (name) => JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', `battery-menu-${name}.json`), 'utf8'));
+
+test('energySection: "No Apps Using Significant Energy" is none', () => {
+  assert.strictEqual(checks.energySection(fixture('none')).state, 'none');
+});
+
+test('energySection: app names carried as buttons and menu items are read, and Meter is found', () => {
+  const r = checks.energySection(fixture('listed-meter'));
+  assert.strictEqual(r.state, 'listed');
+  assert.deepStrictEqual(r.apps, ['Safari', 'Meter']);
+});
+
+test('energySection: only "Meter Pro" listed is not Meter (the match is exact)', () => {
+  const r = checks.energySection(fixture('listed-meter-pro'));
+  assert.strictEqual(r.state, 'listed');
+  assert.ok(!r.apps.includes('Meter'));
+});
+
+test('energySection: a heading with no rows readable is unreadable, never "Meter not listed"', () => {
+  assert.strictEqual(checks.energySection(fixture('unreadable-no-rows')).state, 'unreadable');
+});
+
+test('energySection: no energy heading at all is unreadable', () => {
+  assert.strictEqual(checks.energySection(fixture('unreadable-no-section')).state, 'unreadable');
+});
+
+test('energySection: the menu macOS really showed (captured here, on AC) lists its app and not Meter', () => {
+  const r = checks.energySection(fixture('real-ac-listed'));
+  assert.strictEqual(r.state, 'listed');
+  assert.ok(r.apps.length >= 1 && !r.apps.includes('Meter'), JSON.stringify(r));
+});
+
+const pmDate = (sec) => {
+  const x = new Date(sec * 1000);
+  const p = (n) => String(n).padStart(2, '0');
+  const off = -x.getTimezoneOffset();
+  return `${x.getFullYear()}-${p(x.getMonth() + 1)}-${p(x.getDate())} ${p(x.getHours())}:${p(x.getMinutes())}:${p(x.getSeconds())} ${off < 0 ? '-' : '+'}${p(Math.floor(Math.abs(off) / 60))}${p(Math.abs(off) % 60)}`;
+};
+const ASSERT = (sec, src) => `${pmDate(sec)} Assertions          \tSummary- [System: PrevIdle] Using ${src} (Charge:80)`;
+const SLEEP = (sec) => `${pmDate(sec)} Sleep               \tEntering Sleep state due to 'Clamshell Sleep':TCPKeepAlive=active Using Batt (Charge:90%) 3 secs`;
+const WAKE = (sec) => `${pmDate(sec)} Wake                \tWake from Deep Idle [CDNVAP] : due to EC.LidOpen Using BATT (Charge:50%)`;
+const DARK = (sec) => `${pmDate(sec)} DarkWake            \tDarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake Using BATT (Charge:50)`;
+const H = 3600;
+
+test('batteryDay: 450 power lines after the switch are read whole (a 400-line window lost the AC line)', () => {
+  const at = Math.floor(Date.now() / 1000);
+  const lines = [ASSERT(at - 8 * H, 'AC'), ...Array.from({ length: 450 }, (_, i) => ASSERT(at - 8 * H + 60 + i * 60, 'Batt'))];
+  const r = checks.batteryDay(lines, at);
+  assert.strictEqual(r.state, 'ok');
+  assert.ok(Math.abs(r.hours - 7.98) < 0.05, r.hours);
+});
+
+test('batteryDay: 8 hours of sleep on battery are wall time, not awake time', () => {
+  const at = Math.floor(Date.now() / 1000);
+  const lines = [ASSERT(at - 10 * H, 'AC'), ASSERT(at - 9.5 * H, 'Batt'), SLEEP(at - 9 * H), DARK(at - 5 * H), WAKE(at - 1 * H), ASSERT(at - 0.5 * H, 'BATT')];
+  const r = checks.batteryDay(lines, at);
+  assert.ok(Math.abs(r.hours - 9.5) < 0.01);
+  assert.ok(Math.abs(r.sleptHours - 8) < 0.01, `slept ${r.sleptHours}`);
+  assert.ok(Math.abs(r.awakeHours - 1.5) < 0.01);
+});
+
+test('batteryDay: no AC line at all is unreadable (the switch cannot be dated)', () => {
+  const at = Math.floor(Date.now() / 1000);
+  assert.strictEqual(checks.batteryDay([ASSERT(at - 8 * H, 'Batt')], at).state, 'unreadable');
+});
+
+test('batteryDay: a Mac that never went on battery after the last AC line is unreadable', () => {
+  const at = Math.floor(Date.now() / 1000);
+  assert.strictEqual(checks.batteryDay([ASSERT(at - 8 * H, 'AC')], at).state, 'unreadable');
+});
+
+// --- F4/F6: the energy report's Given ---------------------------------------------------
+
+function energyReport(over = {}) {
+  const at = Math.floor(Date.now() / 1000);
+  const started = lstart(at - 20 * H);
+  return {
+    at,
+    power: "Now drawing from 'Battery Power'",
+    powerLog: [ASSERT(at - 10 * H, 'AC'), ASSERT(at - 9 * H, 'Batt')],
+    meter: {
+      program: checks.INSTALLED, pid: 4242, started, version: VERSION, sha: SHA,
+      live: { stat1: 'S', time1: '1:00.00', stat2: 'S', time2: '1:00.30', ax: 'CPU 10%  GPU  2%  RAM 50%  45°C' },
+    },
+    meterAfter: { pid: 4242, started },
+    menu: fixture('listed-meter-pro'),
+    control: { seen: true, name: 'EnergyControl' },
+    ...over,
+  };
+}
+const energyJudge = (r) => checks.judgeEnergy(r, { version: VERSION }).problems.join('; ');
+
+test('judgeEnergy: a sound report passes', () => {
+  assert.strictEqual(energyJudge(energyReport()), '');
+});
+
+test('judgeEnergy: version 0.1.0 is not the P7 build', () => {
+  const r = energyReport();
+  r.meter.version = '0.1.0';
+  assert.match(energyJudge(r), /not the P7 build/);
+});
+
+test('judgeEnergy: a frozen meter (CPU time not advancing, no Accessibility title) fails', () => {
+  const frozen = energyReport();
+  frozen.meter.live.time2 = frozen.meter.live.time1;
+  assert.match(energyJudge(frozen), /CPU time/);
+  const silent = energyReport();
+  silent.meter.live.ax = '';
+  assert.match(energyJudge(silent), /Accessibility/);
+});
+
+test('judgeEnergy: a day mostly asleep fails the 6 awake hours', () => {
+  const r = energyReport();
+  const at = r.at;
+  r.powerLog = [ASSERT(at - 10 * H, 'AC'), ASSERT(at - 9.5 * H, 'Batt'), SLEEP(at - 9 * H), WAKE(at - 1 * H)];
+  assert.match(energyJudge(r), /awake/);
+});
+
+test('judgeEnergy: without the positive control listed, a quiet menu proves nothing', () => {
+  const r = energyReport({ control: { seen: false, name: 'EnergyControl' } });
+  assert.match(energyJudge(r), /control/);
+});
+
+test('judgeEnergy: an unreadable menu fails plainly, distinct from Meter listed', () => {
+  const r = energyReport({ menu: fixture('unreadable-no-rows') });
+  assert.match(energyJudge(r), /unreadable/);
+  const listed = energyReport({ menu: fixture('listed-meter') });
+  assert.match(checks.judgeEnergy(listed, { version: VERSION }).meterListed ? 'listed' : '', /listed/);
+});
+
+test('judgeEnergy: a restart during the day fails (the meter started after the switch to battery)', () => {
+  const r = energyReport();
+  r.meter.started = lstart(r.at - 2 * H);
+  r.meterAfter.started = r.meter.started;
+  assert.match(energyJudge(r), /since before/);
+});

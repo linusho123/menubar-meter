@@ -142,7 +142,125 @@ function judgeSoak(report, { version, sevenDays = 7 * DAY } = {}) {
   return { given, then, stats };
 }
 
+/** All the elements of a `meter-ax windows` dump (an array of windows) or of a flat element list. */
+function flatElements(dump) {
+  if (!Array.isArray(dump)) return [];
+  return dump.flatMap((x) => (x && Array.isArray(x.elements) ? x.elements : [x]));
+}
+
+const SECTION_HEADING = /^(?:No )?(?:Apps )?Using Significant Energy$/i;
+const ROW_ROLES = new Set(['AXButton', 'AXMenuItem', 'AXStaticText', 'AXCheckBox', 'AXRadioButton', 'AXLink', 'AXMenuButton']);
+
+/**
+ * Reads the battery menu's energy section from a `meter-ax windows` dump of Control Center:
+ * { state: 'none' | 'listed' | 'unreadable', apps }. The heading ("Using Significant Energy", or
+ * "No Apps Using Significant Energy") is followed by one row per app, carried as a button or menu
+ * item whose title, description or value is the app's name, up to the next heading or the
+ * "Battery Settings…" button. A heading with no row readable, or no heading at all, is
+ * unreadable: not the same as the meter not being listed.
+ */
+function energySection(dump) {
+  const elements = flatElements(dump);
+  const at = elements.findIndex((e) => SECTION_HEADING.test(String(e.text || '').trim()));
+  if (at < 0) return { state: 'unreadable', apps: [], why: 'the menu shows no energy section' };
+  if (/^No /i.test(elements[at].text.trim())) return { state: 'none', apps: [] };
+  const apps = [];
+  for (const e of elements.slice(at + 1)) {
+    const text = String(e.text || '').trim();
+    if (e.role === 'AXHeading' || /^Battery Settings/i.test(text)) break;
+    if (ROW_ROLES.has(e.role) && text) apps.push(text);
+  }
+  return apps.length
+    ? { state: 'listed', apps }
+    : { state: 'unreadable', apps: [], why: 'the energy section is there but no app row is readable' };
+}
+
+const PMSET_EVENT = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} [+-]\d{4}) (Sleep|Wake|DarkWake)(?: {2,}|\t)/;
+
+/**
+ * How long the Mac has been on battery, from pmset's log lines (the whole span since the last
+ * "Using AC" line, not a tail of the log): { state: 'ok' | 'unreadable', since, hours, sleptHours,
+ * awakeHours }. Sleep runs from an "Entering Sleep" line to the next full "Wake" line (a DarkWake is
+ * a maintenance wake and does not end it), and is taken out of the hours.
+ */
+function batteryDay(lines, at) {
+  const power = lines.map((l, i) => ({ i, t: pmsetSeconds(l), ac: /Using AC/i.test(l), batt: /Using Batt/i.test(l) }));
+  const lastAC = power.filter((p) => p.ac).at(-1);
+  if (!lastAC) return { state: 'unreadable', why: 'pmset\'s log holds no "Using AC" line: the switch to battery cannot be dated' };
+  const first = power.find((p) => p.i > lastAC.i && p.batt && p.t !== null);
+  if (!first) return { state: 'unreadable', why: 'pmset\'s log shows no switch to battery after its last "Using AC" line' };
+  const since = first.t;
+  let slept = 0;
+  let asleepFrom = null;
+  for (const line of lines.slice(first.i)) {
+    const m = PMSET_EVENT.exec(line);
+    if (!m) continue;
+    const t = pmsetSeconds(m[1]);
+    if (m[2] === 'Sleep' && /Entering Sleep/.test(line) && asleepFrom === null) asleepFrom = Math.max(t, since);
+    else if (m[2] === 'Wake' && asleepFrom !== null) {
+      slept += Math.max(0, Math.min(t, at) - asleepFrom);
+      asleepFrom = null;
+    }
+  }
+  if (asleepFrom !== null) slept += Math.max(0, at - asleepFrom);
+  const hours = (at - since) / 3600;
+  return { state: 'ok', since, hours, sleptHours: slept / 3600, awakeHours: hours - slept / 3600 };
+}
+
+const ALL_DAY_HOURS = 6;
+
+/**
+ * Judges the battery-menu report (energy-check.js) against the P7 build `version`:
+ * { given, when, then, problems, day, section, meterListed }. `given`: on battery for at least
+ * 6 AWAKE hours (sleep taken out, per pmset's own lines), one installed P7 meter running since before
+ * the switch and alive. `when`: the menu was readable and the positive control (a busy stand-in the
+ * harness started) was listed, so a quiet menu is not just a menu that lists nothing. `then`: the
+ * meter is not among the listed apps.
+ */
+function judgeEnergy(report, { version, allDayHours = ALL_DAY_HOURS } = {}) {
+  const given = [];
+  const when = [];
+  const then = [];
+  if (!/'Battery Power'/.test(report.power || '')) given.push(`pmset: not on battery when the menu was read: ${report.power}`);
+  const day = batteryDay(report.powerLog || [], report.at);
+  if (day.state !== 'ok') given.push(`the battery day is unreadable: ${day.why}`);
+  else {
+    if (!(day.hours >= allDayHours)) given.push(`on battery ${day.hours.toFixed(1)} h before the read (all day: ${allDayHours} h or more)`);
+    if (!(day.awakeHours >= allDayHours)) {
+      given.push(`only ${day.awakeHours.toFixed(1)} awake hours on battery (${day.hours.toFixed(1)} h on battery, ${day.sleptHours.toFixed(1)} h asleep): all day is ${allDayHours} awake hours or more`);
+    }
+  }
+  const meter = report.meter || {};
+  if (meter.program !== INSTALLED) given.push('the installed meter was not the one read');
+  if (meter.version !== version) given.push(`not the P7 build: the installed meter is version ${meter.version}, expected ${version}`);
+  if (!meter.sha) given.push('the installed meter\'s executable sha is not recorded');
+  if (day.state === 'ok' && meter.started) {
+    if (!(lstartSeconds(meter.started) < day.since)) {
+      given.push(`the meter (started ${meter.started}) was not running since before the Mac went on battery`);
+    }
+  }
+  const after = report.meterAfter || {};
+  if (after.pid !== meter.pid || after.started !== meter.started) given.push('the meter was replaced while the menu was read');
+  const live = meter.live || {};
+  if (/^[TZ]/.test(live.stat1 || 'X') || /^[TZ]/.test(live.stat2 || 'X')) given.push(`the meter was in state ${live.stat1}/${live.stat2} (stopped or zombie, or not recorded)`);
+  try {
+    if (cost.cpuSeconds(live.time2) - cost.cpuSeconds(live.time1) < 0.01) given.push('the meter\'s CPU time did not advance between two reads 10 s apart: a stopped or hung meter');
+  } catch {
+    given.push('the meter\'s CPU time was not recorded twice');
+  }
+  if (!live.ax) given.push('the meter did not answer Accessibility with a title');
+
+  const section = energySection(report.menu);
+  if (section.state === 'unreadable') when.push(`the battery menu's energy section was unreadable: ${section.why}`);
+  if (!report.control || !report.control.seen) {
+    when.push(`the positive control${report.control && report.control.name ? ` (${report.control.name})` : ''} was never listed under the energy section, so a quiet menu proves nothing: run the check again later in the day`);
+  }
+  const meterListed = section.apps.includes('Meter');
+  if (meterListed) then.push(`the battery menu lists ${JSON.stringify(section.apps)}, Meter among them`);
+  return { given, when, then, problems: [...given, ...when, ...then], day, section, meterListed };
+}
+
 module.exports = {
-  judgeSoak, appVersion,
+  judgeSoak, appVersion, energySection, batteryDay, judgeEnergy, flatElements, ALL_DAY_HOURS,
   dir, soakReportFile, energyReportFile, INSTALLED, soakReport, energyReport, lstartSeconds, pmsetSeconds,
 };

@@ -24,10 +24,6 @@ const required = (value, what) => {
   return value;
 };
 
-/** How long a day on battery must have lasted for the battery menu's read to count: "all day". */
-const ALL_DAY_HOURS = 6;
-const DAY = 86400;
-
 /**
  * The meter being measured is the release build: the program the harness started is the bundled
  * release app, every object it was linked from was compiled in the release configuration (the
@@ -200,36 +196,25 @@ module.exports = (reg) => {
 
   const energy = checks.energyReport();
   if (energy) {
+    // "All day" is at least 6 AWAKE hours on battery with the meter running (ruled 2026-10-22): wall
+    // time on battery less the Mac's own sleeps, from pmset's whole log.
     reg.define(/^the Mac is on battery and the meter has been running all day$/, (w) => {
-      assert.match(energy.power, /'Battery Power'/, `pmset: on battery when the menu was read: ${energy.power}`);
-      const lines = energy.powerLog;
-      const lastAC = lines.map((l, i) => (/Using AC/.test(l) ? i : -1)).filter((i) => i >= 0).at(-1) ?? -1;
-      const onBattery = lines.slice(lastAC + 1).find((l) => /Using Batt/.test(l));
-      assert.ok(onBattery, `pmset's log shows the switch to battery: ${JSON.stringify(lines.slice(-5))}`);
-      const since = checks.pmsetSeconds(onBattery);
-      const hours = (energy.at - since) / 3600;
-      assert.ok(hours >= ALL_DAY_HOURS, `on battery ${hours.toFixed(1)} h before the read (all day: ${ALL_DAY_HOURS} h or more)`);
-      assert.strictEqual(energy.meter.program, checks.INSTALLED, 'the installed meter was running');
-      assert.ok(checks.lstartSeconds(energy.meter.started) < since,
-        `the meter (started ${energy.meter.started}) ran since before the Mac went on battery`);
-      w.energy = energy;
+      const judged = checks.judgeEnergy(energy, { version: checks.appVersion() });
+      assert.deepStrictEqual(judged.given, [], `the battery day (${checks.energyReportFile})`);
+      w.energy = judged;
     });
 
     reg.define(/^the user opens the battery menu$/, (w) => {
-      const e = required(w.energy, 'energy');
-      // The menu the harness opened: the battery's own, with its energy section.
-      assert.ok(e.menu.includes('Battery'), `the battery menu was open: ${JSON.stringify(e.menu)}`);
-      assert.ok(e.menu.some((t) => /^(No )?Apps Using Significant Energy$/.test(t)),
-        `the menu shows its energy section: ${JSON.stringify(e.menu)}`);
-      w.batteryMenu = e.menu;
+      const judged = required(w.energy, 'energy');
+      // The menu the harness opened: the battery's own, its energy section readable, and an app
+      // the harness itself ran busy shown in it (so the section lists what is listed at all).
+      assert.deepStrictEqual(judged.when, [], 'the battery menu as the harness read it');
+      w.batteryMenu = judged;
     });
 
     reg.define(/^the user does not see the meter listed under "Apps Using Significant Energy"$/, (w) => {
-      const menu = required(w.batteryMenu, 'batteryMenu');
-      const heading = menu.findIndex((t) => /^(No )?Apps Using Significant Energy$/.test(t));
-      const listed = menu.slice(heading + 1);
-      assert.ok(!listed.some((t) => /\bMeter\b/.test(t)),
-        `the battery menu lists ${JSON.stringify(listed)} under "${menu[heading]}"`);
+      const judged = required(w.batteryMenu, 'batteryMenu');
+      assert.deepStrictEqual(judged.then, [], `energy section ${judged.section.state}; apps: ${JSON.stringify(judged.section.apps)}`);
     });
   }
 };
