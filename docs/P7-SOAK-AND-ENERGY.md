@@ -118,24 +118,18 @@ swift build -c release --product meter-ax
 node scripts/checks/energy-check.js
 ```
 
-It checks that the Mac is on battery and the installed meter is running, starts a **positive
-control** (a stand-in app of the harness's own, named `EnergyControl`, busy on four cores, which shows briefly in the Dock as a regular app; it ends
-it by its pid and start time when done), then opens the battery menu in the menu bar (an
-Accessibility press, as an assistive app presses it; the pointer doesn't move), reads every element
-in it and closes it, repeating every 30 seconds for up to 10 minutes until the control is listed
-under *Using Significant Energy*. It also reads the meter's state, CPU time (twice, 10 seconds
-apart) and status item. It writes `~/Library/Logs/menubar-meter-checks/energy-report.json`. You
-will see the battery menu open and close a few times. If it says the Mac is not on battery, it
-wrote nothing.
+It checks that the Mac is on battery and the installed meter is running, opens the battery menu in
+the menu bar (an Accessibility press, as an assistive app presses it; the pointer doesn't move),
+reads every element in it and closes it. It also reads the meter's state, CPU time (twice, 10
+seconds apart) and status item. It writes
+`~/Library/Logs/menubar-meter-checks/energy-report.json`. You will see the battery menu open and
+close once. If it says the Mac is not on battery, it wrote nothing.
 
-**If it says the control was never listed**, macOS didn't call the control significant in those
-10 minutes, and a menu that lists nothing proves nothing: run it again later in the day. A report
-whose menu can't be read (no energy section, or a section with no readable app) fails, and says
-"unreadable", which is not the same as the meter being listed.
-
-The terminal you run it from needs Accessibility permission (the same one the test harness uses).
-
-The day can fall inside the soak week: being on battery doesn't restart the meter.
+**What passes (ruling 2026-10-22):** `Meter` is not listed AND the menu was read properly, proved
+by either at least one other app listed under *Using Significant Energy* (for example Ghostty), or
+macOS's own "No Apps Using Significant Energy" text. It fails if `Meter` is listed, or if neither
+proof is seen (the menu is unreadable: no energy section, or a heading with no rows). No stand-in
+app is run by default (`METER_ENERGY_CONTROL=1` adds the optional one).
 
 ## 3. When the soak has reported (day 7 or later)
 
@@ -162,7 +156,7 @@ Tell a build session that both reports are in `~/Library/Logs/menubar-meter-chec
    judges the whole week of one process (above) in Activity Monitor's units (megabytes of
    1,048,576 bytes, one decimal, under 50.0 MB) and shows the highest and the day-7 readings; the
    energy scenario reads the battery menu's elements and fails if the exact name `Meter` is listed
-   under *Using Significant Energy*, if the menu can't be read, or if the control wasn't listed;
+   under *Using Significant Energy*, or if the menu can't be read (above);
 3. if both pass, the suite then fails once on purpose with a "wip entry fully bound" message: that
    is the ratchet asking for the `own-cost` entry to be removed from the register in
    `test/features.test.js`. Removing it leaves the register empty;

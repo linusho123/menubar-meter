@@ -1,7 +1,7 @@
 'use strict';
 // The battery-menu read for "never an energy hog" (D75, Q3), run by the user at the end of a day
 // on battery (docs/P7-SOAK-AND-ENERGY.md): `node scripts/checks/energy-check.js`. It checks the
-// Mac is on battery and the installed meter is running, runs a positive control (a stand-in app of
+// Mac is on battery and the installed meter is running, (optionally, METER_ENERGY_CONTROL=1, runs a positive control (a stand-in app of
 // the harness's own, busy on four cores, ended by its pid and start time when done), opens the
 // battery menu through Accessibility (meter-ax, as an assistive app presses a menu bar item; the
 // pointer never moves), reads every element in it until the control is listed (up to 10 minutes),
@@ -126,7 +126,8 @@ async function main() {
   const texts = () => JSON.parse(run(meterAx, ['texts', String(controlCenter)]));
   if (texts().length > 0) stop('a Control Center menu is already open; close it and run this again');
 
-  const control = startControl();
+  const useControl = process.env.METER_ENERGY_CONTROL === '1';
+  const control = useControl ? startControl() : { end() {} };
   let menu = [];
   let seen = false;
   let tries = 0;
@@ -159,7 +160,7 @@ async function main() {
         await closeMenu();
       }
       const apps = menu.flatMap((w) => w.elements).filter((e) => e.text).map((e) => e.text);
-      seen = apps.includes(CONTROL_NAME);
+      seen = useControl ? apps.includes(CONTROL_NAME) : true;
       if (!seen && Date.now() < deadline) await sleep(30000);
     } while (!seen && Date.now() < deadline);
   } finally {
@@ -175,10 +176,10 @@ async function main() {
   meter.live = { stat1: first.stat, time1: first.time, stat2: second.stat, time2: second.time, ax: title };
   const after = installedMeter();
 
-  if (!seen) console.error(`energy check: the control (${CONTROL_NAME}) was never listed in ${tries} read(s); the report will not pass. Run it again later in the day.`);
+  if (useControl && !seen) console.error(`energy check: the control (${CONTROL_NAME}) was never listed in ${tries} read(s); the report will not pass. Run it again later in the day.`);
   const report = {
     at: Date.now() / 1000, power, powerLog, meter, meterAfter: { pid: after.pid, started: after.started }, menu,
-    control: { name: CONTROL_NAME, seen, tries },
+    control: { name: CONTROL_NAME, used: useControl, seen, tries },
   };
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, 'energy-report.json');

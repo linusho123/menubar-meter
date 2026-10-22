@@ -213,8 +213,8 @@ const ALL_DAY_HOURS = 6;
  * Judges the battery-menu report (energy-check.js) against the P7 build `version`:
  * { given, when, then, problems, day, section, meterListed }. `given`: on battery for at least
  * 6 AWAKE hours (sleep taken out, per pmset's own lines), one installed P7 meter running since before
- * the switch and alive. `when`: the menu was readable and the positive control (a busy stand-in the
- * harness started) was listed, so a quiet menu is not just a menu that lists nothing. `then`: the
+ * the switch and alive. `when`: the menu was readable and the menu was read properly (another app listed, or
+ * macOS's explicit "No Apps Using Significant Energy"). `then`: the
  * meter is not among the listed apps.
  */
 function judgeEnergy(report, { version, allDayHours = ALL_DAY_HOURS } = {}) {
@@ -252,9 +252,8 @@ function judgeEnergy(report, { version, allDayHours = ALL_DAY_HOURS } = {}) {
 
   const section = energySection(report.menu);
   if (section.state === 'unreadable') when.push(`the battery menu's energy section was unreadable: ${section.why}`);
-  if (!report.control || !report.control.seen) {
-    when.push(`the positive control${report.control && report.control.name ? ` (${report.control.name})` : ''} was never listed under the energy section, so a quiet menu proves nothing: run the check again later in the day`);
-  }
+  // The stand-in control is optional (ruling 2026-10-22): the read is proved by another app listed,
+  // or by macOS's own "No Apps Using Significant Energy"; neither seen is unreadable (above).
   const meterListed = section.apps.includes('Meter');
   if (meterListed) then.push(`the battery menu lists ${JSON.stringify(section.apps)}, Meter among them`);
   return { given, when, then, problems: [...given, ...when, ...then], day, section, meterListed };

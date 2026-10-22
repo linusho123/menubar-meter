@@ -242,9 +242,18 @@ test('judgeEnergy: a day mostly asleep fails the 6 awake hours', () => {
   assert.match(energyJudge(r), /awake/);
 });
 
-test('judgeEnergy: without the positive control listed, a quiet menu proves nothing', () => {
-  const r = energyReport({ control: { seen: false, name: 'EnergyControl' } });
-  assert.match(energyJudge(r), /control/);
+test('judgeEnergy (ruling): no control needed; Ghostty listed and Meter not passes', () => {
+  assert.strictEqual(energyJudge(energyReport({ control: undefined, menu: fixture('real-ac-listed') })), '');
+});
+
+test('judgeEnergy (ruling): the explicit "No Apps Using Significant Energy" passes', () => {
+  assert.strictEqual(energyJudge(energyReport({ control: undefined, menu: fixture('none') })), '');
+});
+
+test('judgeEnergy (ruling): Meter listed fails; heading with no rows and an empty menu are unreadable and fail', () => {
+  assert.match(energyJudge(energyReport({ control: undefined, menu: fixture('listed-meter') })), /Meter among them/);
+  assert.match(energyJudge(energyReport({ control: undefined, menu: fixture('unreadable-no-rows') })), /unreadable/);
+  assert.match(energyJudge(energyReport({ control: undefined, menu: fixture('empty') })), /unreadable/);
 });
 
 test('judgeEnergy: an unreadable menu fails plainly, distinct from Meter listed', () => {
