@@ -99,10 +99,13 @@ function lineTexts(text, label) {
 
 /**
  * A real, paced transfer on this Mac while the panel is open, compared with what netstat and
- * ioreg count over the same seconds. Two streams: 20 MB/s, whose mean must match the system's to
+ * ioreg count over the same seconds. Three streams: 20 MB/s, whose mean must match the system's to
  * 2% on the network (a 1024 prefix is 4.7% off there); and 1.01 MB/s, just over the step from KB
  * to MB, where a step at 1024 (or 300) leaves a reading such as `1005.0 KB/s` that the decimal
- * reference formatter would write otherwise, and a 1024 prefix reads 2.4% low.
+ * reference formatter would write otherwise. Above 1 MB/s the text has one decimal, so that stream's
+ * bound is half a step (50 KB/s) and cannot see a 1024 prefix (24 KB/s low); the 0.9 MB/s stream
+ * reads in KB/s to a tenth, and its bound is 1.5% of the system's own count plus 2 KB/s (about
+ * 16 KB/s) against a 1024 prefix's 22 KB/s. Bounds follow netstat's count, not the nominal pace.
  */
 /** The system's counters and the moment they were read (the middle of the reads). */
 function snapshot() {
@@ -114,7 +117,8 @@ function snapshot() {
 
 const STREAMS = [
   { name: '20 MB/s', net: 20e6, tolerance: 0.02, floor: 60e3 },
-  { name: '1.01 MB/s', net: 1.01e6, tolerance: 0.02, floor: 60e3 },
+  { name: '1.01 MB/s', net: 1.01e6, tolerance: 0.005, floor: 50e3 },
+  { name: '0.9 MB/s', net: 0.9e6, tolerance: 0.015, floor: 2e3 },
 ];
 
 for (const stream of STREAMS) {
