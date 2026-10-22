@@ -22,6 +22,10 @@ async function launchWithFeed(world, values) {
 
 /** Starts the release app, reading the real system. */
 async function launchReal(world) {
+  const foreign = procs.foreignMeters();
+  if (foreign.length > 0) {
+    throw new Error(`a meter the harness did not start is running (pid ${foreign.join(', ')}): click Quit Meter first`);
+  }
   const meter = procs.start(paths.releaseApp);
   world.defer(() => procs.end(meter));
   await menubar.waitForItem(meter.pid, () => true, 10000, 'the meter in the menu bar');

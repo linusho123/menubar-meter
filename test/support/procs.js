@@ -13,6 +13,22 @@ function startTimeOf(pid) {
   }
 }
 
+const ownedProcesses = [];
+
+/**
+ * Pids of running meters (any copy of Meter.app) that neither the harness started nor are in
+ * `allowed` (the pids of the install it manages). Another meter would hold the shortcut and
+ * make a count of meters wrong.
+ */
+function foreignMeters(allowed = []) {
+  const live = new Set(ownedProcesses.filter(isRunning).map((o) => o.pid));
+  const out = execFileSync('ps', ['-axo', 'pid=,comm='], { encoding: 'utf8' });
+  return out.split('\n').map((l) => /^\s*(\d+)\s+(.+)$/.exec(l))
+    .filter((m) => m && /\/Meter\.app\/Contents\/MacOS\/Meter$/.test(m[2]))
+    .map((m) => Number(m[1]))
+    .filter((pid) => !live.has(pid) && !allowed.includes(pid));
+}
+
 /** Spawns a process the harness owns. */
 function start(file, args = [], options = {}) {
   const child = spawn(file, args, { stdio: ['ignore', 'pipe', 'pipe'], ...options });
@@ -20,6 +36,7 @@ function start(file, args = [], options = {}) {
   const started = startTimeOf(child.pid);
   if (!started) throw new Error(`${file} (pid ${child.pid}) exited at once`);
   const owned = { child, pid: child.pid, started, file, exited: false };
+  ownedProcesses.push(owned);
   child.on('exit', () => { owned.exited = true; });
   return owned;
 }
@@ -41,4 +58,4 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-module.exports = { start, end, isRunning, sleep, startTimeOf };
+module.exports = { foreignMeters, start, end, isRunning, sleep, startTimeOf };
