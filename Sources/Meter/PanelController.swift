@@ -8,10 +8,10 @@ import MeterCore
 /// Monitor…` (D59) and `Quit Meter`. It shows no peak values (D9).
 @MainActor
 final class PanelController {
-  private static let width: CGFloat = 384
-  private static let margin: CGFloat = 12
-  private static let scaleWidth: CGFloat = 34
-  private static let plotHeight: CGFloat = 120
+  private static let width = CGFloat(PanelLayout.width)
+  private static let margin = CGFloat(PanelLayout.margin)
+  private static let scaleWidth = CGFloat(PanelLayout.scaleWidth)
+  private static let plotHeight = CGFloat(PanelLayout.plotHeight)
   private static let rowHeight: CGFloat = 20
 
   private let engine: MeterEngine
@@ -58,7 +58,7 @@ final class PanelController {
     }
 
     let margin = Self.margin
-    let plotX = margin + Self.scaleWidth + 6
+    let plotX = margin + Self.scaleWidth + CGFloat(PanelLayout.scaleGap)
     let plotWidth = Self.width - plotX - margin
     let legendHeight: CGFloat = 18
     let timeHeight = ceil(font.boundingRectForFont.height)
@@ -204,10 +204,13 @@ final class PanelController {
   /// Redraws the graph and the legend from the engine, and re-ranks the heavy tasks, when the
   /// panel is open. `now` is the pass that just ran; nil means the engine's latest.
   func refresh(now: Double?) {
-    guard isOpen || now == nil else {
+    switch PanelPass.plan(isOpen: isOpen, now: now) {
+    case .forgetGone:
       // Closed, nothing is listed: a task that has gone since is forgotten all the same (D40).
       ender.forgetGone()
       return
+    case .redraw:
+      break
     }
     let at = now ?? engine.now
     graph.show(engine.history, now: at)
@@ -323,7 +326,9 @@ private final class PanelBackground: NSView {
 /// The graph is painted into a bitmap of the meter's own and shown as its layer's contents.
 /// Painted in `draw(_:)` instead, it cost the meter about 45 MB of graphics memory while the panel
 /// was open (`footprint`: "Owned physical footprint (unmapped) (graphics)"), taking its Memory in
-/// Activity Monitor to 69 MB, over the 50 MB line (D76); the bitmap costs under 1 MB (DESIGN, P7).
+/// Activity Monitor to 69 MB, over the 50 MB line (D76); the bitmap itself
+/// is under 1 MB (GraphBitmapTests); with the panel's other views the open panel costs about 4 MB
+/// (DESIGN, P7).
 final class GraphView: NSView {
   /// Room above 100% and below 0% so a line at either end is drawn whole.
   static let inset: CGFloat = 2
@@ -369,10 +374,12 @@ final class GraphView: NSView {
   override func updateLayer() {
     guard let layer else { return }
     let scale = window?.backingScaleFactor ?? 2
-    let width = Int((bounds.width * scale).rounded())
-    let height = Int((bounds.height * scale).rounded())
+    let size = GraphBitmap.size(width: bounds.width, height: bounds.height, scale: scale)
+    let width = size.width
+    let height = size.height
     guard width > 0, height > 0 else { return }
-    if bitmap?.width != width || bitmap?.height != height {
+    let current = bitmap.map { BitmapSize(width: $0.width, height: $0.height) }
+    if GraphBitmap.needsNew(old: current, new: size) {
       bitmap = CGContext(
         data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
         space: window?.colorSpace?.cgColorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!,
