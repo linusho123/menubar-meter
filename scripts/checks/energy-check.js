@@ -88,7 +88,7 @@ function startControl() {
 <key>CFBundleIdentifier</key><string>local.menubar-meter.energycontrol</string>
 <key>CFBundleName</key><string>${CONTROL_NAME}</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>LSUIElement</key><true/>
+<key>LSUIElement</key><false/>
 </dict></plist>
 `);
   try { execFileSync('codesign', ['--force', '--sign', '-', app], { stdio: 'ignore' }); } catch { /* unsigned still runs */ }

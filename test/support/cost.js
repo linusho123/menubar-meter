@@ -32,6 +32,12 @@ function psStatTime(pid) {
 
 /** How little CPU time a running meter can use in a slice and still be called alive. */
 const MIN_ADVANCE = 0.02;
+/**
+ * A 20 s slice must show at least one tick of ps's 10 ms CPU time: the real meter uses about 1.5 ms
+ * a second (0.015% of the Mac), so 20 s is 0.02 to 0.04 s and a stricter slice line would fail a
+ * healthy meter, while a stopped one reads exactly 0.
+ */
+const SLICE_ADVANCE = 0.01;
 const SLICE_SECONDS = 20;
 
 /**
@@ -58,7 +64,7 @@ function liveness(samples) {
     let to = from;
     while (to + 1 < samples.length && samples[to].at - samples[from].at < SLICE_SECONDS * 1000) to++;
     // A last slice shorter than half a slice is not judged.
-    if (samples[to].at - samples[from].at >= SLICE_SECONDS * 500 && samples[to].cpu - samples[from].cpu < MIN_ADVANCE) {
+    if (samples[to].at - samples[from].at >= SLICE_SECONDS * 500 && samples[to].cpu - samples[from].cpu < SLICE_ADVANCE) {
       problems.push(`its CPU time did not advance in the 20 s slice from second ${((samples[from].at - first.at) / 1000).toFixed(0)}`);
       break;
     }
@@ -135,9 +141,13 @@ function judgeHour(samples, { hourMs = 3600 * 1000 } = {}) {
   if (dead) problems.push(`the meter was in state ${dead.stat} at minute ${((dead.at - start) / unit).toFixed(0)}`);
   const silent = samples.find((s) => s.ax === false);
   if (silent) problems.push(`the meter did not answer Accessibility at minute ${((silent.at - start) / unit).toFixed(0)}`);
-  for (let i = 1; i < samples.length; i++) {
-    if (samples[i].cpu - samples[i - 1].cpu < MIN_ADVANCE) {
-      problems.push(`its CPU time did not advance between minute ${((samples[i - 1].at - start) / unit).toFixed(0)} and ${((samples[i].at - start) / unit).toFixed(0)}: a stopped or hung meter`);
+  // CPU time must advance over every 60 s of the hour (the meter uses about 0.09 s a minute; ps reads
+  // it in 10 ms ticks, so a shorter window would read zero on a healthy meter).
+  for (let i = 0; i < samples.length; i++) {
+    const j = samples.findIndex((s, k) => k > i && s.at - samples[i].at >= 57000);
+    if (j < 0) break;
+    if (samples[j].cpu - samples[i].cpu < MIN_ADVANCE) {
+      problems.push(`its CPU time did not advance over the minute from minute ${((samples[i].at - start) / unit).toFixed(0)}: a stopped or hung meter`);
       break;
     }
   }
