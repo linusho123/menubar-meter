@@ -34,6 +34,14 @@ bundle .build/test/release/Meter build/test/Meter.app
 # The installer: build/Meter.pkg installs the release app in /Applications, registers its login
 # job and opens it (D83); the same package over an older copy replaces it (D84).
 sh scripts/build-pkg.sh build/Meter.app build/Meter.pkg
+# The older release package for the manual log-in check (docs/P6-LOGIN-CHECK.md): the release
+# program under the release identifier at version 0.0.9, to install the real package over.
+rm -rf build/check
+mkdir -p build/check
+older=$(mktemp -d)
+bundle .build/release/Meter "$older/Meter.app" local.menubar-meter.Meter 0.0.9
+sh scripts/build-pkg.sh "$older/Meter.app" build/check/Meter-0.0.9.pkg
+rm -rf "$older"
 # The harness's packages: the release program under its own identifier (never the installed
 # meter's), an older and a newer version, installed only into the user's home folder. Their
 # bundles are made in a temporary folder and removed, so no second copy is left about.
@@ -81,4 +89,4 @@ plutil -replace CFBundleName -string Front "$front/Contents/Info.plist"
 plutil -replace LSUIElement -bool NO "$front/Contents/Info.plist"
 codesign --force --sign - "$front" >/dev/null 2>&1
 
-echo "built build/Meter.app, build/Meter.pkg and build/test/Meter.app"
+echo "built build/Meter.app, build/Meter.pkg, build/check/Meter-0.0.9.pkg and build/test/Meter.app"
