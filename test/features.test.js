@@ -11,9 +11,19 @@ runFeatures(paths.features, {
   'ending-tasks': require('./steps/ending-tasks.steps'),
   'network-and-disk': require('./steps/network-and-disk.steps'),
   presence: require('./steps/presence.steps'),
+  'own-cost': require('./steps/own-cost.steps'),
 }, {
   wip: [
-    'own-cost',
+    // Checked on the user's own installed meter in normal use (docs/P7-SOAK-AND-ENERGY.md): the
+    // seven-day memory row binds once the soak has reported (Q2), and the energy scenario once the
+    // battery menu has been read after a day on battery (Q3). The one-hour row runs now.
+    {
+      feature: 'own-cost',
+      scenarios: [
+        "The meter's memory stays under its line",
+        'The meter is never flagged as an energy hog',
+      ],
+    },
   ],
   manifest: path.join(paths.root, 'run-manifest.ndjson'),
 });

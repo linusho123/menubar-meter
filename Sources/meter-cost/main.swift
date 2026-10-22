@@ -8,6 +8,7 @@ import OwnCost
 //                                 prints {mean, peak, seconds} as shares of the whole Mac in %
 //   meter-cost footprint          stdin: `footprint -f bytes --noCategories -p <pid>` output;
 //                                 prints {bytes, shown, under50}, as Activity Monitor's Memory
+//   meter-cost memory <bytes>     the same for a physical footprint already read, in bytes
 
 struct CPUResult: Encodable {
   var mean: Double
@@ -33,8 +34,10 @@ func emit<T: Encodable>(_ value: T) {
   print(String(decoding: data, as: UTF8.self))
 }
 
-let input = String(decoding: FileHandle.standardInput.readDataToEndOfFile(), as: UTF8.self)
 let arguments = CommandLine.arguments
+let input =
+  ["cpu", "footprint"].contains(arguments.count > 1 ? arguments[1] : "")
+  ? String(decoding: FileHandle.standardInput.readDataToEndOfFile(), as: UTF8.self) : ""
 switch arguments.count > 1 ? arguments[1] : "" {
 case "cpu":
   guard arguments.count == 3, let cores = Int(arguments[2]) else { fail("usage: cpu <cores>") }
@@ -58,6 +61,14 @@ case "footprint":
     MemoryResult(
       bytes: bytes, shown: ActivityMonitorMemory.text(bytes: bytes),
       under50: ActivityMonitorMemory.isUnder(bytes: bytes, megabytes: 50)))
+case "memory":
+  guard arguments.count == 3, let bytes = UInt64(arguments[2]) else {
+    fail("usage: memory <bytes>")
+  }
+  emit(
+    MemoryResult(
+      bytes: bytes, shown: ActivityMonitorMemory.text(bytes: bytes),
+      under50: ActivityMonitorMemory.isUnder(bytes: bytes, megabytes: 50)))
 default:
-  fail("usage: meter-cost cpu <cores> | footprint")
+  fail("usage: meter-cost cpu <cores> | footprint | memory <bytes>")
 }
