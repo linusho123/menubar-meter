@@ -113,9 +113,20 @@ async function until(fn, ms, what) {
 }
 
 /** Takes back everything an install made: the job, its LaunchAgent, the app, the receipt. */
-async function uninstall() {
+async function uninstall(installedAt = null) {
   assertOurs();
   run('/bin/launchctl', ['bootout', JOB]);
+  // A copy the installer opened that runs outside the job (it could not load it) is the
+  // install's own too: ended only if it runs the installed program and started after the
+  // harness's install began.
+  await procs.sleep(200);
+  for (const pid of meterPids()) {
+    const seen = proc(pid);
+    if (installedAt !== null && seen && new Date(seen.started).getTime() >= Math.floor(installedAt / 1000) * 1000
+      && seen.program === PROGRAM) {
+      process.kill(pid, 'SIGTERM');
+    }
+  }
   await until(() => meterPids().length === 0, 10000, 'the installed meter to end');
   fs.rmSync(AGENT, { force: true });
   if (installedId() === LABEL) {
@@ -148,14 +159,14 @@ async function assertGone() {
  */
 function install(world, version) {
   assertOurs();
+  const startedAt = Date.now();
   if (!world.presenceCleanup) {
     world.presenceCleanup = true;
     world.defer(async () => {
-      await uninstall();
+      await uninstall(startedAt);
       await assertGone();
     });
   }
-  const startedAt = Date.now();
   const r = run('/usr/sbin/installer', ['-pkg', pkg(version), '-target', 'CurrentUserHomeDirectory']);
   if (r.status !== 0) throw new Error(`installer failed (${r.status}): ${r.stdout}${r.stderr}`);
   return { startedAt, endedAt: Date.now() };
