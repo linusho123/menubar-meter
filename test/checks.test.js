@@ -17,6 +17,8 @@ const checks = require('./support/checks');
 
 const soakScript = path.join(paths.root, 'scripts', 'checks', 'soak.sh');
 const energyScript = path.join(paths.root, 'scripts', 'checks', 'energy-check.js');
+/** The version the app is built with (app/Info.plist). */
+const appVersion = () => execFileSync('plutil', ['-extract', 'CFBundleShortVersionString', 'raw', path.join(paths.root, 'app', 'Info.plist')], { encoding: 'utf8' }).trim();
 const lines = (file) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
 
 function soak(dir, env) {
@@ -43,6 +45,10 @@ test('the soak reads the meter as ps and footprint do, and reports once the proc
     assert.ok(Math.abs(s.footprint - memory.bytes) <= 0.1 * memory.bytes, `soak ${s.footprint} bytes, footprint ${memory.bytes}`);
     assert.ok(Math.abs(s.at - Date.now() / 1000) < 30);
     assert.match(s.cpu, /^\d+:\d{2}\.\d{2}$/);
+    assert.match(s.stat, /^[A-Z]/, 'the process state is recorded');
+    assert.match(s.sha, /^[0-9a-f]{64}$/, 'the executable\'s sha256 is recorded');
+    assert.ok(Number.isInteger(s.sleeptime) && Number.isInteger(s.waketime), 'kern.sleeptime and kern.waketime are recorded');
+    assert.strictEqual(s.version, appVersion(), 'the version of the app read');
     assert.ok(!fs.existsSync(path.join(dir, 'soak-report.ndjson')), 'no report before the process is old enough');
     assert.ok(Math.abs(checks.lstartSeconds(s.started) - Date.now() / 1000) < 120, 'the start time reads back as now');
     // Old enough: the report holds every sample of that process, and the soak stops reading.
@@ -55,6 +61,48 @@ test('the soak reads the meter as ps and footprint do, and reports once the proc
     assert.strictEqual(samples.length, 2, 'once reported, the soak reads no more');
   } finally {
     await procs.end(meter);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a restart mid-soak gives no report for the old process: the report starts at the new process\'s first reading', async () => {
+  const foreign = procs.foreignMeters();
+  assert.deepStrictEqual(foreign, [], 'no meter the harness did not start is running');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'meter-soak-'));
+  const env = { METER_SOAK_PROGRAM: paths.releaseApp, METER_SOAK_SECONDS: '0' };
+  const first = procs.start(paths.releaseApp);
+  let second;
+  try {
+    await menubar.waitForItem(first.pid, () => true, 10000, 'the first meter');
+    // One reading of the first process, not yet old enough (the check needs 1 h), then it ends.
+    soak(dir, { ...env, METER_SOAK_SECONDS: '3600' });
+    await procs.end(first);
+    soak(dir, env); // no meter running: a null line
+    second = procs.start(paths.releaseApp);
+    await menubar.waitForItem(second.pid, () => true, 10000, 'the second meter');
+    soak(dir, env);
+    const report = lines(path.join(dir, 'soak-report.ndjson'));
+    assert.strictEqual(report.length, 1, `the report holds the new process only: ${JSON.stringify(report)}`);
+    assert.strictEqual(report[0].pid, second.pid);
+    assert.ok(!fs.readFileSync(path.join(dir, 'soak-report.ndjson'), 'utf8').includes(`"pid":${first.pid},`), 'nothing of the old process');
+    assert.strictEqual(lines(path.join(dir, 'soak.ndjson')).length, 3, 'the log keeps the old reading, the gap and the new one');
+  } finally {
+    await procs.end(first);
+    if (second) await procs.end(second);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the soak leaves an error line, never a silent exit, when it cannot take a reading', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'meter-soak-'));
+  try {
+    // logd runs as root, and footprint may not read another user's process: no reading, so an error line.
+    soak(dir, { METER_SOAK_PROGRAM: '/usr/libexec/logd', METER_SOAK_SECONDS: '0' });
+    const samples = lines(path.join(dir, 'soak.ndjson'));
+    assert.strictEqual(samples.length, 1, 'a run that reads nothing still leaves a line');
+    assert.match(samples[0].error, /footprint/);
+    assert.ok(!fs.existsSync(path.join(dir, 'soak-report.ndjson')));
+  } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });

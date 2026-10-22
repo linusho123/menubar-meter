@@ -164,6 +164,11 @@ module.exports = (reg) => {
     const looked = required(w.looked, 'looked');
     if (time === '7 days') required(w.soak, 'soak');
     else required(w.hourMeter, 'hourMeter');
+    if (time === '7 days') {
+      const st = w.soak.judged.stats;
+      const week = `highest reading ${st.max}, day-7 reading ${st.day7}, ${st.samples} readings, awake ${(st.awakeShare * 100).toFixed(0)}% of the time`;
+      assert.deepStrictEqual(w.soak.judged.then, [], `the week's readings: ${week}`);
+    }
     const said = looked.map((l) => `${l.shown} (${l.bytes} bytes, panel ${l.panel})`).join('; ');
     let history = '';
     if (time === '1 hour') {
@@ -181,18 +186,13 @@ module.exports = (reg) => {
   const soak = checks.soakReport();
   if (soak) {
     reg.define(/^the meter has been running without a restart for 7 days$/, (w) => {
-      assert.ok(soak.length > 0, `the soak report ${checks.soakReportFile} holds samples`);
-      const first = soak[0];
-      for (const s of soak) {
-        assert.strictEqual(s.program, checks.INSTALLED, `the soak read the installed meter: ${JSON.stringify(s)}`);
-        assert.ok(s.pid === first.pid && s.started === first.started,
-          `one meter process, never restarted: ${JSON.stringify(first)} then ${JSON.stringify(s)}`);
-      }
-      const started = checks.lstartSeconds(first.started);
-      const atSevenDays = soak.find((s) => s.at - started >= 7 * DAY);
-      assert.ok(atSevenDays, `a reading at seven days or later: started ${first.started}, last read ${new Date(soak.at(-1).at * 1000)}`);
-      const memory = JSON.parse(run(paths.meterCost, ['memory', String(atSevenDays.footprint)]));
-      w.soak = { atSevenDays: { ...memory, at: atSevenDays.at } };
+      // One process (same pid and start time) of the P7 build, seven days old by its own start time,
+      // read without an awake hole, its CPU time advancing: a restart resets the count (ruled 2026-10-22).
+      const judged = checks.judgeSoak(soak, { version: checks.appVersion() });
+      assert.deepStrictEqual(judged.given, [], `the soak report ${checks.soakReportFile} shows one P7 process alive for seven days`);
+      const last = soak.filter((s) => s.program && !s.error).at(-1);
+      const memory = JSON.parse(run(paths.meterCost, ['memory', String(last.footprint)]));
+      w.soak = { judged, atSevenDays: { ...memory, at: last.at } };
     });
   }
 
