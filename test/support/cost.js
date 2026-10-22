@@ -130,13 +130,15 @@ function judgeHour(samples, { hourMs = 3600 * 1000 } = {}) {
   } else if (mean(late) - mean(early) > 5 * MB) {
     problems.push(`memory grew: the closed-panel mean was ${shownMB(mean(early))} in minutes 2 to 11 and ${shownMB(mean(late))} in minutes 50 to 59 (more than 5 MB up)`);
   }
+  // 90 s for the real hour; a shortened hour (checking the row itself) keeps 15 s for the click's reading.
+  const gapMs = Math.max(1.5 * unit, unit + 15000);
   for (let i = 1; i < samples.length; i++) {
-    if (samples[i].at - samples[i - 1].at > 1.5 * unit) {
-      problems.push(`gap of ${((samples[i].at - samples[i - 1].at) / 1000).toFixed(0)} s between samples at minute ${((samples[i - 1].at - start) / unit).toFixed(0)} (more than ${(1.5 * unit / 1000).toFixed(0)} s)`);
+    if (samples[i].at - samples[i - 1].at > gapMs) {
+      problems.push(`gap of ${((samples[i].at - samples[i - 1].at) / 1000).toFixed(0)} s between samples at minute ${((samples[i - 1].at - start) / unit).toFixed(0)} (more than ${(gapMs / 1000).toFixed(0)} s)`);
       break;
     }
   }
-  if (samples.at(-1).at - start < hourMs - 1.5 * unit) problems.push('the samples stop before the hour is out');
+  if (samples.at(-1).at - start < hourMs - gapMs) problems.push('the samples stop before the hour is out');
   const dead = samples.find((s) => /^[TZ]/.test(s.stat));
   if (dead) problems.push(`the meter was in state ${dead.stat} at minute ${((dead.at - start) / unit).toFixed(0)}`);
   const silent = samples.find((s) => s.ax === false);
