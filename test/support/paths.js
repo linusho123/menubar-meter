@@ -13,4 +13,5 @@ module.exports = {
   meterAx: path.join(root, '.build', 'release', 'meter-ax'),
   neighbor: path.join(root, '.build', 'release', 'meter-neighbor'),
   gpuLoad: path.join(root, '.build', 'release', 'meter-gpu-load'),
+  meterCost: path.join(root, '.build', 'release', 'meter-cost'),
 };

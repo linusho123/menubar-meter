@@ -1,0 +1,67 @@
+[
+ {
+  "title": "Control Center",
+  "elements": [
+   {
+    "role": "AXGroup",
+    "subrole": "AXHostingView",
+    "text": ""
+   },
+   {
+    "role": "AXStaticText",
+    "subrole": "",
+    "text": "Battery"
+   },
+   {
+    "role": "AXStaticText",
+    "subrole": "",
+    "text": "100%"
+   },
+   {
+    "role": "AXStaticText",
+    "subrole": "",
+    "text": "Power Source: Power Adapter"
+   },
+   {
+    "role": "AXStaticText",
+    "subrole": "",
+    "text": "Fully Charged"
+   },
+   {
+    "role": "AXScrollArea",
+    "subrole": "",
+    "text": ""
+   },
+   {
+    "role": "AXHeading",
+    "subrole": "",
+    "text": "Energy Mode"
+   },
+   {
+    "role": "AXCheckBox",
+    "subrole": "AXToggle",
+    "text": "Low Power"
+   },
+   {
+    "role": "AXScrollArea",
+    "subrole": "",
+    "text": ""
+   },
+   {
+    "role": "AXHeading",
+    "subrole": "",
+    "text": "Using Significant Energy"
+   },
+   {
+    "role": "AXButton",
+    "subrole": "",
+    "text": "Ghostty"
+   },
+   {
+    "role": "AXButton",
+    "subrole": "",
+    "text": "Battery Settings…"
+   }
+  ]
+ }
+]

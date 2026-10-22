@@ -66,10 +66,10 @@ Click through as before.
 **Expect:** the item stays (or blinks once) in the menu bar.
 
 ```
-sh scripts/login-check.sh "3 installed 0.1.0" | tee -a ~/p6-login-check.txt
+sh scripts/login-check.sh "3 installed 0.7.0" | tee -a ~/p6-login-check.txt
 ```
 
-**Expect:** `version: 0.1.0`; `state = running`; a pid different from step 2's; user your own
+**Expect:** `version: 0.7.0`; `state = running`; a pid different from step 2's; user your own
 name; `processes: 1`; `copies: /Applications/Meter.app` only; the registry enabled as in step 2.
 Click the item: the panel's last rows are `Open Activity Monitor…` and `Quit Meter`, and nothing
 offers an update.
@@ -102,7 +102,7 @@ cd ~/gitrepos/menubar-meter
 { sh scripts/login-check.sh "6 after log-in"; last -1 "$USER"; } | tee -a ~/p6-login-check.txt
 ```
 
-**Expect:** `version: 0.1.0`; `state = running`; `runs = 1`; user your own name; ppid 1; its
+**Expect:** `version: 0.7.0`; `state = running`; `runs = 1`; user your own name; ppid 1; its
 start time a few seconds after the log-in time `last` prints; `processes: 1`; registry enabled.
 
 Then start a build session and say: "P6 login check done, read ~/p6-login-check.txt", with a

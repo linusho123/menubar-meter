@@ -1,4 +1,5 @@
 import AppKit
+import MeterClock
 import MeterCore
 
 @MainActor

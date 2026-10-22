@@ -1,5 +1,6 @@
 #if METER_TEST_SOURCE
   import AppKit
+  import MeterClock
   import MeterCore
 
   /// The test reading source, compiled only into test builds (-DMETER_TEST_SOURCE) and used only

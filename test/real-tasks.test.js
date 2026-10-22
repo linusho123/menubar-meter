@@ -144,6 +144,20 @@ test('a real task\'s GPU in the list agrees with Activity Monitor\'s % GPU', asy
       const atOpening = amNow();
       const refreshBy = Date.now() + 10000;
       while (Date.now() < refreshBy && amNow() === atOpening) await procs.sleep(500);
+      // Activity Monitor can read 0% for the stand-in for a while although it keeps the GPU busy
+      // (P6's gate: 0% in 5 of 8 readings). Its readings count only once it attributes GPU to the
+      // stand-in again: above 0% at six readings in a row, a second apart, so across at least one
+      // of its refreshes.
+      const attributedBy = Date.now() + 60000;
+      const waited = [];
+      for (let streak = 0; streak < 6;) {
+        assert.ok(Date.now() < attributedBy,
+          `Activity Monitor never gave the stand-in GPU six readings in a row: ${waited.join(', ')}`);
+        const reading = amNow();
+        waited.push(reading);
+        streak = reading > 0 ? streak + 1 : 0;
+        if (streak < 6) await procs.sleep(1000);
+      }
       // Then 16 readings of each side over about 15 s, their medians compared.
       const ours = [];
       const theirs = [];

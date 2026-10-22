@@ -8,6 +8,9 @@ import ApplicationServices
 //   meter-ax items               every app's status items, as JSON
 //   meter-ax watch <pid> <ms>    print "<epoch ms>\t<title>" each time the item's title changes
 //   meter-ax press <pid>         press the app's status item, as a click on it does
+//   meter-ax press-item <pid> <title>
+//                                press the one status item of the app titled <title> (another
+//                                app's menu bar extra, such as Control Center's Battery)
 //   meter-ax windows <pid>       the app's windows and every element in them, as JSON: role,
 //                                text, frame, and for text the frame of each word
 //   meter-ax texts <pid>         the texts in the app's windows, in order, as a JSON array: a
@@ -293,6 +296,16 @@ case "press":
   guard elements.count == 1 else { fail("press: \(elements.count) status items for \(pid)") }
   let result = AXUIElementPerformAction(elements[0], kAXPressAction as CFString)
   guard result == .success else { fail("press: AXPress failed (\(result.rawValue))") }
+case "press-item":
+  guard arguments.count == 4, let pid = Int32(arguments[2]) else {
+    fail("usage: press-item <pid> <title>")
+  }
+  let elements = statusElements(pid: pid).filter { title($0) == arguments[3] }
+  guard elements.count == 1 else {
+    fail("press-item: \(elements.count) status items titled \(arguments[3]) for \(pid)")
+  }
+  let result = AXUIElementPerformAction(elements[0], kAXPressAction as CFString)
+  guard result == .success else { fail("press-item: AXPress failed (\(result.rawValue))") }
 case "windows":
   guard arguments.count == 3, let pid = Int32(arguments[2]) else { fail("usage: windows <pid>") }
   emit(windows(pid: pid))
@@ -399,7 +412,8 @@ case "front":
       bundle: app.bundleIdentifier ?? ""))
 default:
   fail(
-    "usage: meter-ax item <pid> | items | watch <pid> <ms> | press <pid> | windows <pid>"
+    "usage: meter-ax item <pid> | items | watch <pid> <ms> | press <pid> | press-item <pid> <title>"
+      + " | windows <pid>"
       + " | texts <pid> | watch-texts <pid> <ms> | press-button <pid> <title> | move <x> <y> | click <x> <y> | pointer"
       + " | cell <pid> <key column> <key> <column>"
       + " | front")

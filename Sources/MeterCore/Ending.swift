@@ -146,6 +146,17 @@ public final class TaskEnder {
     }
   }
 
+  /// Forgets every task that has gone, asking the system alone: while the panel is closed no list
+  /// is measured, and a task ended then must still take its state with it (D40), not hold it
+  /// until the panel next opens. A task still running keeps its state.
+  public func forgetGone() {
+    guard !endings.isEmpty else { return }
+    keep(only: [])
+  }
+
+  /// How many tasks have an ending state.
+  public var count: Int { endings.count }
+
   /// Whether anything may be sent to task `id` now: the task under its process id is the same
   /// task, started at the same moment, is not process 0 or 1, and is not `system` by the rule
   /// the rows follow.

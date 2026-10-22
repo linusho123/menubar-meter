@@ -133,12 +133,14 @@ for (const stream of STREAMS) {
         await withRealMeter({}, async (meter) => {
           await panel.click(meter.pid);
           // Loopback traffic (Activity Monitor counts lo0, as measured) and uncached disk reads and
-          // writes, each at a steady rate, for 14 s, in a temporary folder.
+          // writes, each at a steady rate, for 22 s, in a temporary folder.
           const transfer = procs.start('python3', ['-I', path.join(__dirname, 'support', 'transfer.py'),
-            '14', String(stream.net), String(8 * MB), String(6 * MB), dir]);
+            '22', String(stream.net), String(8 * MB), String(6 * MB), dir]);
           try {
             await procs.sleep(3500);
-            const watcher = await panel.watchTexts(meter.pid, 8000);
+            // 16 s of readings (8 s until P7): the counters' jitter at the window's two edges
+            // weighs half as much against the mean, on a correct panel and a 1024-prefix one alike.
+            const watcher = await panel.watchTexts(meter.pid, 16000);
             // The counters are read as the watcher shows its first reading and as it ends, so
             // the system's rates and the panel's mean span the same seconds.
             const first = snapshot();

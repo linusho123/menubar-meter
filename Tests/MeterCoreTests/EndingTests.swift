@@ -318,6 +318,43 @@ struct OutlastsTests {
     #expect(ender.button(for: replaced, now: 1) == .end)
   }
 
+  @Test("closed, with no list measured, a task gone loses its state; one still running keeps it")
+  func goneWhileClosed() {
+    let system = FakeSignals()
+    let ender = TaskEnder(signals: system)
+    let gone = system.run(700)
+    let running = system.run(701)
+    let replaced = system.run(702)
+    ender.click(gone, now: 0)
+    ender.click(running, now: 0)
+    ender.click(replaced, now: 0)
+    system.exit(700)
+    system.run(702, started: 2000)
+    ender.forgetGone()
+    #expect(ender.count == 1)
+    #expect(ender.button(for: gone, now: 1) == .end)
+    #expect(ender.button(for: replaced, now: 1) == .end)
+    #expect(ender.button(for: running, now: 1) == .ending)
+    #expect(ender.button(for: running, now: 5) == .forceQuit)
+  }
+
+  @Test("with no ending state, forgetting the gone asks the system nothing")
+  func forgetGoneIdle() {
+    let system = FakeSignals()
+    let ender = TaskEnder(signals: system)
+    ender.forgetGone()
+    #expect(system.calls.isEmpty)
+    let task = system.run(700)
+    ender.click(task, now: 0)
+    system.exit(700)
+    system.calls = []
+    ender.forgetGone()
+    #expect(system.calls == ["running"])
+    system.calls = []
+    ender.forgetGone()
+    #expect(system.calls.isEmpty)
+  }
+
   @Test("the ending state is the ender's, not the panel's: it survives a panel close and reopen")
   func survivesPanelClose() {
     let system = FakeSignals()
