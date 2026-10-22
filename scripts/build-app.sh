@@ -8,13 +8,18 @@
 # and builds the harness helpers (meter-ax, meter-neighbor, meter-gpu-load, meter-standin) into
 # .build/release.
 set -eu
+umask 022
 cd "$(dirname "$0")/.."
 
-bundle() { # <binary> <bundle path>
+bundle() { # <binary> <bundle path> [identifier] [version]
+  id=${3:-local.menubar-meter.Meter}
   rm -rf "$2"
   mkdir -p "$2/Contents/MacOS"
   cp app/Info.plist "$2/Contents/Info.plist"
+  plutil -replace CFBundleIdentifier -string "$id" "$2/Contents/Info.plist"
+  if [ -n "${4:-}" ]; then plutil -replace CFBundleShortVersionString -string "$4" "$2/Contents/Info.plist"; fi
   cp "$1" "$2/Contents/MacOS/Meter"
+  chmod 755 "$2/Contents/MacOS/Meter"
   codesign --force --sign - "$2" >/dev/null 2>&1
 }
 
@@ -27,6 +32,30 @@ bundle .build/release/Meter build/Meter.app
 
 swift build -c release --product Meter --scratch-path .build/test -Xswiftc -DMETER_TEST_SOURCE
 bundle .build/test/release/Meter build/test/Meter.app
+
+# The installer: build/Meter.pkg installs the release app in /Applications, registers its login
+# job and opens it (D83); the same package over an older copy replaces it (D84).
+sh scripts/build-pkg.sh build/Meter.app build/Meter.pkg
+# The older release package for the manual log-in check (docs/P6-LOGIN-CHECK.md): the release
+# program under the release identifier at version 0.0.9, to install the real package over.
+rm -rf build/check
+mkdir -p build/check
+older=$(mktemp -d)
+bundle .build/release/Meter "$older/Meter.app" local.menubar-meter.Meter 0.0.9
+sh scripts/build-pkg.sh "$older/Meter.app" build/check/Meter-0.0.9.pkg
+rm -rf "$older"
+# The harness's packages: the release program under its own identifier (never the installed
+# meter's), an older and a newer version, installed only into the user's home folder. Their
+# bundles are made in a temporary folder and removed, so no second copy is left about.
+pkgtest=local.menubar-meter.Meter.presencetest
+rm -rf build/test/pkg
+mkdir -p build/test/pkg
+staging=$(mktemp -d)
+for v in 0.0.1 0.0.2; do
+  bundle .build/release/Meter "$staging/$v/Meter.app" "$pkgtest" "$v"
+  sh scripts/build-pkg.sh "$staging/$v/Meter.app" "build/test/pkg/Meter-$v.pkg" home
+done
+rm -rf "$staging"
 
 # The stand-in app: the stand-in program bundled as an app named Xcode, with its own identifier.
 standin=build/test/standins/Xcode.app
@@ -49,4 +78,17 @@ cat >"$standin/Contents/Info.plist" <<'PLIST'
 PLIST
 codesign --force --sign - "$standin" >/dev/null 2>&1
 
-echo "built build/Meter.app and build/test/Meter.app"
+# The front-app stand-in: the same program as a regular app, the app in front while the
+# shortcut is pressed (in place of Safari, so the user's own browser is never touched).
+front=build/test/standins/Front.app
+rm -rf "$front"
+mkdir -p "$front/Contents/MacOS"
+cp .build/release/meter-standin "$front/Contents/MacOS/Front"
+cp "$standin/Contents/Info.plist" "$front/Contents/Info.plist"
+plutil -replace CFBundleExecutable -string Front "$front/Contents/Info.plist"
+plutil -replace CFBundleIdentifier -string local.menubar-meter.standin.front "$front/Contents/Info.plist"
+plutil -replace CFBundleName -string Front "$front/Contents/Info.plist"
+plutil -replace LSUIElement -bool NO "$front/Contents/Info.plist"
+codesign --force --sign - "$front" >/dev/null 2>&1
+
+echo "built build/Meter.app, build/Meter.pkg, build/check/Meter-0.0.9.pkg and build/test/Meter.app"

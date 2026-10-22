@@ -129,7 +129,10 @@ MainActor.assumeIsolated {
   if asApp {
     let app = NSApplication.shared
     app.delegate = standIn
-    app.setActivationPolicy(.accessory)
+    // An app with no Dock icon, unless its bundle says it is a regular app (the front-app
+    // stand-in, which takes the menu bar as the app in front).
+    let regular = Bundle.main.object(forInfoDictionaryKey: "LSUIElement") as? Bool == false
+    app.setActivationPolicy(regular ? .regular : .accessory)
     app.run()
   } else {
     withExtendedLifetime(standIn) { RunLoop.main.run() }

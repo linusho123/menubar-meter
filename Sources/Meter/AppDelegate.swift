@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private var panel: PanelController?
   private var timer: Timer?
   private var engine: MeterEngine?
+  private let hotKeys = HotKeys()
   private var clock: () -> Double = Clock.now
 
   func applicationDidFinishLaunching(_ notification: Notification) {
@@ -26,6 +27,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     self.engine = engine
     self.panel = panel
     self.statusItem = statusItem
+
+    // Control-Option-Command-M opens and closes the panel from any app, exactly as a click on
+    // the item does; Esc closes it while it is open (D98).
+    hotKeys.register(.togglePanel, id: 1) { [weak self] in
+      guard let self, let button = self.statusItem?.button else { return }
+      self.panel?.toggle(below: button)
+    }
+    panel.onOpenChange = { [weak self] open in
+      guard let self else { return }
+      if open {
+        self.hotKeys.register(.closePanel, id: 2) { [weak self] in self?.panel?.close() }
+      } else {
+        self.hotKeys.unregister(id: 2)
+      }
+    }
 
     // The system's own sleep and wake notifications: a sleep is a gap in the graph (D52).
     let workspace = NSWorkspace.shared.notificationCenter
