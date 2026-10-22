@@ -17,7 +17,8 @@ const meterAx = path.join(root, '.build', 'release', 'meter-ax');
 const dir = process.env.METER_CHECKS_DIR || path.join(os.homedir(), 'Library', 'Logs', 'menubar-meter-checks');
 const INSTALLED = '/Applications/Meter.app/Contents/MacOS/Meter';
 
-const run = (file, args) => execFileSync(file, args, { encoding: 'utf8' });
+// pmset's log runs to megabytes.
+const run = (file, args) => execFileSync(file, args, { encoding: 'utf8', maxBuffer: 1 << 28 });
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function stop(message) {
@@ -52,7 +53,7 @@ async function main() {
   run(meterAx, ['press-item', String(controlCenter), battery.title]);
   let menu = [];
   try {
-    const deadline = Date.now() + 5000;
+    const deadline = Date.now() + 10000;
     // The menu fills in a moment after it opens: read until its energy section shows.
     while (Date.now() < deadline) {
       await sleep(250);
@@ -63,6 +64,13 @@ async function main() {
     menu = texts();
   } finally {
     run(meterAx, ['press-item', String(controlCenter), battery.title]);
+    // The menu takes a moment to go.
+    const closedBy = Date.now() + 3000;
+    while (texts().length > 0 && Date.now() < closedBy) await sleep(100);
+    if (texts().length > 0) console.error('energy check: the battery menu is still open; click elsewhere to close it');
+  }
+  if (!menu.some((t) => /^(No )?Apps Using Significant Energy$/.test(t))) {
+    console.error('energy check: the menu showed no energy section this time; the report will not pass. Run it again.');
   }
 
   const report = { at: Date.now() / 1000, power, powerLog, meter, menu };
