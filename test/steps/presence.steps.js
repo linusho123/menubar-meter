@@ -46,8 +46,10 @@ async function panelBecomes(pid, open, ms) {
 
 /** Clicks Quit Meter, the panel's last row, through Accessibility. */
 function clickQuit(pid) {
-  const texts = panel.textsNow(pid);
-  assert.strictEqual(texts[texts.length - 1], 'Quit Meter', `Quit Meter is the panel's last row: ${JSON.stringify(texts.slice(-3))}`);
+  const [window] = windowsOf(pid);
+  const lowest = window.elements.reduce((a, b) => (b.y > a.y ? b : a));
+  assert.strictEqual(lowest.text, 'Quit Meter', 'Quit Meter is the panel\'s last row');
+  assert.strictEqual(lowest.role, 'AXButton');
   try {
     execFileSync(paths.meterAx, ['press-button', String(pid), 'Quit Meter'], { stdio: 'pipe' });
   } catch (e) {
@@ -352,9 +354,14 @@ async function frontStandIn(w) {
     fs.rmSync(dir, { recursive: true, force: true });
   });
   await presence.until(() => {
-    execFileSync('osascript', ['-e',
-      `tell application "System Events" to set frontmost of (first process whose unix id is ${front.pid}) to true`]);
+    try {
+      execFileSync('osascript', ['-e',
+        `tell application "System Events" to set frontmost of (first process whose unix id is ${front.pid}) to true`],
+      { stdio: 'pipe' });
+    } catch {
+      return false; // not yet known to System Events
+    }
     return ax(['front']).pid === front.pid;
-  }, 5000, 'the stand-in app in front');
+  }, 10000, 'the stand-in app in front');
   w.front = front;
 }

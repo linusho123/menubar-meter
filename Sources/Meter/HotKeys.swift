@@ -39,7 +39,8 @@ final class HotKeys {
   private static func installHandler() {
     guard !installed else { return }
     installed = true
-    var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+    var spec = EventTypeSpec(
+      eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
     InstallEventHandler(
       GetApplicationEventTarget(),
       { _, event, _ -> OSStatus in

@@ -37,7 +37,8 @@ enum Launch {
     let now = Date().timeIntervalSince1970
     if CrashBackoff.decide(starts: state.starts, now: now) == .stayDown {
       FileHandle.standardError.write(
-        Data("meter: started \(CrashBackoff.maxStarts) times in a short while; staying down\n".utf8))
+        Data("meter: started \(CrashBackoff.maxStarts) times in a short while; staying down\n".utf8)
+      )
       exit(KeepAlive.quitStatus)
     }
     state.starts = CrashBackoff.recent(state.starts, now: now) + [now]
