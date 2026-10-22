@@ -34,6 +34,28 @@ struct KeepAliveTests {
     #expect(plist.contains("<integer>\(KeepAlive.throttleSeconds)</integer>"))
   }
 
+  @Test("a terminate request (Activity Monitor's Quit, kill, log-out) ends it as a quit")
+  func terminateIsQuit() {
+    // The visionary's ruling 2026-10-21: SIGTERM is the user's own quit, so the job exits 0.
+    #expect(KeepAlive.exitStatus(onSignal: 15) == KeepAlive.quitStatus)
+    #expect(!KeepAlive.relaunches(after: .exited(KeepAlive.exitStatus(onSignal: 15)!)))
+    // A crash signal is never turned into a quit.
+    for crash: Int32 in [4, 6, 9, 10, 11] {
+      #expect(KeepAlive.exitStatus(onSignal: crash) == nil)
+    }
+  }
+
+  @Test("a quit stays quit only until the next login: the job is loaded and started afresh then")
+  func quitIsNotRemembered() {
+    let plist = KeepAlive.agentPlist(label: "a.b", program: "/x/Meter.app/Contents/MacOS/Meter")
+    #expect(plist.contains("<key>RunAtLoad</key>\n\t<true/>"))
+    #expect(!plist.contains("Disabled"))
+    // The only state a quit leaves is launchd's, for the login session it ended in.
+    #expect(KeepAlive.startsAtNextLogin(after: .exited(KeepAlive.quitStatus)))
+    #expect(KeepAlive.startsAtNextLogin(after: .signaled(15)))
+    #expect(KeepAlive.startsAtNextLogin(after: .signaled(11)))
+  }
+
   @Test("a program path is written as XML text")
   func escapes() {
     let plist = KeepAlive.agentPlist(label: "a", program: "/A & B/<M>")

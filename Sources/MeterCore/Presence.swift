@@ -28,6 +28,20 @@ public enum KeepAlive {
     }
   }
 
+  /// What the meter does when it is sent `signal`: nil leaves the signal's default (a crash
+  /// signal ends it, and launchd relaunches it); a status ends it at once as a quit. A terminate
+  /// request (SIGTERM: Activity Monitor's Quit, `kill`, log-out and shutdown) is the user's own
+  /// quit, like `Quit Meter` (the visionary's ruling 2026-10-21, D104).
+  public static func exitStatus(onSignal signal: Int32) -> Int32? {
+    signal == 15 ? quitStatus : nil  // SIGTERM
+  }
+
+  /// Whether the job starts at the next login after it ended so. It always does: a quit is only
+  /// launchd's state for the login session it ended in (the plist has `RunAtLoad` and is never
+  /// disabled), so a SIGTERM at log-out or shutdown cannot keep the meter away from the next
+  /// login (D42, D104).
+  public static func startsAtNextLogin(after end: Termination) -> Bool { true }
+
   /// The LaunchAgent property list for the job labelled `label`, running `program` (the
   /// installed bundle's own executable, by its full path) with `--agent`. It encodes
   /// `relaunches(after:)` for launchd.
