@@ -335,7 +335,7 @@ instead of ⌃⌥⌘M, history kept across a crash, an update prompt.
 **Rulings:** D73 (under 1% closed, under 5% open), D76 (under 50 MB after an
 hour and after seven days), D75 (never an energy hog).
 **Needs first:** the visionary's answers to **Q2** and **Q3**.
-**Carried in:** a test pinning the sampler's clock across sleep (a reading spanning a sleep comes out low, never huge; deferred from P5's head review), and pruning ending states for tasks gone while the panel is closed (deferred from P4's head review).
+**Carried in:** a test pinning the sampler's clock across sleep (a reading spanning a sleep comes out low, never huge; deferred from P5's head review), and pruning ending states for tasks gone while the panel is closed (deferred from P4's head review). Also harden the real D49 Activity Monitor GPU check (test/real-tasks.test.js): in P6's final gate Activity Monitor read 0% for the stand-in in 5 of 8 samples, so the check must wait until Activity Monitor attributes GPU to the stand-in before comparing; and the P5 network bound's margin is thin (closest wrong run 2.8 KB/s outside it).
 **Builds:** nothing new unless the measurements fail; then optimisation
 inside the lines, never by sampling less often than the contract demands.
 **Far-side checks:** `top`/`ps` CPU time of the meter's process over a
