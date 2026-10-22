@@ -89,7 +89,7 @@ module.exports = (reg) => {
 
   reg.define(/^the user has not opened the meter themselves$/, async (w) => {
     // Installed by the one install step (the installer opens it, not the user), then logged out.
-    presence.install(w, NEWER);
+    await presence.install(w, NEWER);
     await presence.running();
     presence.logOut();
     await presence.until(() => presence.meterPids().length === 0, 10000, 'the meter to end at log-out');
@@ -115,7 +115,7 @@ module.exports = (reg) => {
   // --- D65 and D104 ------------------------------------------------------------------------------
 
   reg.define(/^the meter is in the menu bar and its panel is open$/, async (w) => {
-    presence.install(w, NEWER);
+    await presence.install(w, NEWER);
     w.meter = await presence.running();
     await panel.click(w.meter.pid);
   });
@@ -135,7 +135,7 @@ module.exports = (reg) => {
   });
 
   reg.define(/^the user clicked "Quit Meter"$/, async (w) => {
-    presence.install(w, NEWER);
+    await presence.install(w, NEWER);
     w.meter = await presence.running();
     await panel.click(w.meter.pid);
     w.runsBefore = presence.job().runs;
@@ -172,7 +172,7 @@ module.exports = (reg) => {
   // --- D77 -------------------------------------------------------------------------------------
 
   reg.define(/^the meter is running with its panel (closed|open)$/, async (w, state) => {
-    presence.install(w, NEWER);
+    await presence.install(w, NEWER);
     w.meter = await presence.running();
     // Long enough for the graph to hold a history worth losing.
     await procs.sleep(20000);
@@ -273,7 +273,7 @@ module.exports = (reg) => {
   });
 
   reg.define(/^the user does the one install step$/, async (w) => {
-    w.install = presence.install(w, NEWER);
+    w.install = await presence.install(w, NEWER);
   });
 
   reg.define(/^the user sees the meter's item in the menu bar right away, with no settings to fill in$/, async (w) => {
@@ -286,14 +286,14 @@ module.exports = (reg) => {
   });
 
   reg.define(/^an older version of the meter is installed and starts at login$/, async (w) => {
-    presence.install(w, OLDER);
+    await presence.install(w, OLDER);
     w.oldMeter = await presence.running();
     assert.strictEqual(presence.installedVersion(), OLDER);
     assertStartsAtLogin();
   });
 
   reg.define(/^the user does the one install step with a newer version$/, async (w) => {
-    w.install = presence.install(w, NEWER);
+    w.install = await presence.install(w, NEWER);
   });
 
   reg.define(/^the user sees the newer version in the menu bar$/, async (w) => {

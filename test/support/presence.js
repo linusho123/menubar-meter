@@ -5,8 +5,10 @@
 // job. What the tests read is what macOS itself knows: launchd's job (`launchctl print`), the
 // login-item registry (`sfltool dumpbtm`, through the one sudoers rule that allows it), `ps`,
 // and the menu bar and panel through Accessibility. Every test takes back what it installed:
-// the job, its LaunchAgent, the app, the package receipt, then checks the registry no longer
-// lists the job as enabled. Signals go only to a meter process this install started, checked
+// the job, its LaunchAgent, the app, the package receipt, then checks the registry's record, if
+// any, names no existing file (the record itself clears by itself, about 70 s after the
+// LaunchAgent is gone, so an install waits for the previous one's record to clear first).
+// Signals go only to a meter process this install started, checked
 // by pid, start time and program before each one.
 const fs = require('node:fs');
 const os = require('node:os');
@@ -25,6 +27,9 @@ const DOMAIN = `gui/${process.getuid()}`;
 const JOB = `${DOMAIN}/${LABEL}`;
 const STATE = path.join(os.tmpdir(), LABEL);
 const LSREGISTER = '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister';
+
+/** How long the registry may take to drop the record of a removed LaunchAgent (measured: ~70 s). */
+const REGISTRY_CLEAR_MS = 120000;
 
 const pkg = (version) => path.join(paths.root, 'build', 'test', 'pkg', `Meter-${version}.pkg`);
 
@@ -102,6 +107,14 @@ function registryRecord() {
 
 const enabled = (record) => record !== null && /^\[enabled\b/.test(record.disposition || '');
 
+/** Refuses to go on when a meter the harness did not start runs (it would hold the shortcut). */
+function assertNoForeignMeter(what) {
+  const foreign = procs.foreignMeters(meterPids());
+  if (foreign.length > 0) {
+    throw new Error(`before ${what}: a meter the harness did not start is running (pid ${foreign.join(', ')}): click Quit Meter first`);
+  }
+}
+
 /** Polls `fn` until it returns a truthy value; returns it, or throws after `ms`. */
 async function until(fn, ms, what) {
   const deadline = Date.now() + ms;
@@ -143,11 +156,10 @@ async function assertGone() {
   if (job().loaded) throw new Error(`launchd still holds ${LABEL}`);
   if (fs.existsSync(AGENT)) throw new Error(`${AGENT} is still there`);
   if (meterPids().length > 0) throw new Error('an installed meter still runs');
-  // macOS's registry keeps its record of a LaunchAgent after the file is gone (measured: still
-  // listed, still marked enabled, minutes after removal; only `sfltool resetbtm`, which resets
-  // every login item on the Mac, clears it). Such a record starts nothing: launchd loads only the
-  // LaunchAgent files there are. So the check is that the record, if any, names only files that
-  // no longer exist.
+  // macOS's registry keeps its record of a LaunchAgent after the file is gone, still marked
+  // enabled, and drops it by itself about 70 s later (measured twice; `sfltool resetbtm` is not
+  // needed). Such a record starts nothing: launchd loads only the LaunchAgent files there are.
+  // So the check is that the record, if any, names only files that no longer exist.
   const record = registryRecord();
   if (record && record.executable && fs.existsSync(record.executable)) {
     throw new Error(`the registry's record of ${LABEL} still names ${record.executable}`);
@@ -158,8 +170,16 @@ async function assertGone() {
  * The one install step, as the user does it: the real installer with the harness's package,
  * into the user's home folder. Registers the clean-up for the scenario. Returns when it is done.
  */
-function install(world, version) {
+async function install(world, version) {
   assertOurs();
+  if (!world.presenceCleanup) {
+    // The registry's record of an earlier install outlives it by about 70 s, and a re-install
+    // inside that window keeps the same record (same identifier, same generation), so the
+    // registry part of "starts at login" would be read off the previous install. Wait for it to
+    // clear; a record that stays is a leftover the harness cannot tell from this install's.
+    await until(() => registryRecord() === null, REGISTRY_CLEAR_MS, `the registry's record of ${LABEL} to clear`);
+    assertNoForeignMeter(`${LABEL} install`);
+  }
   const startedAt = Date.now();
   if (!world.presenceCleanup) {
     world.presenceCleanup = true;
@@ -210,6 +230,6 @@ function agentPlist() {
 }
 
 module.exports = {
-  LABEL, APP, PROGRAM, AGENT, install, uninstall, assertGone, running, signal, job, proc, meterPids,
+  LABEL, APP, PROGRAM, AGENT, REGISTRY_CLEAR_MS, install, assertNoForeignMeter, uninstall, assertGone, running, signal, job, proc, meterPids,
   meterItems, registryRecord, enabled, until, logOut, logInLoad, agentPlist, installedVersion, installedId,
 };
