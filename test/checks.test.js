@@ -48,6 +48,7 @@ test('the soak reads the meter as ps and footprint do, and reports once the proc
     assert.match(s.stat, /^[A-Z]/, 'the process state is recorded');
     assert.match(s.sha, /^[0-9a-f]{64}$/, 'the executable\'s sha256 is recorded');
     assert.ok(Number.isInteger(s.sleeptime) && Number.isInteger(s.waketime), 'kern.sleeptime and kern.waketime are recorded');
+    assert.ok(Number.isInteger(s.awake) && s.awake > 0, 'the awake clock is recorded');
     assert.strictEqual(s.version, appVersion(), 'the version of the app read');
     assert.ok(!fs.existsSync(path.join(dir, 'soak-report.ndjson')), 'no report before the process is old enough');
     assert.ok(Math.abs(checks.lstartSeconds(s.started) - Date.now() / 1000) < 120, 'the start time reads back as now');

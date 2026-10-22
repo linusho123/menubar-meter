@@ -5,7 +5,9 @@
 #   {"at": <epoch s>, "program": <path>, "pid": <pid>, "started": <ps lstart>, "stat": <ps state>,
 #    "cpu": <ps time>, "footprint": <phys_footprint bytes, which Activity Monitor's Memory column
 #    shows>, "version": <the installed app's version>, "sha": <sha256 of the executable>,
-#    "sleeptime": <kern.sleeptime sec, the last sleep>, "waketime": <kern.waketime sec, the last wake>}
+#    "sleeptime": <kern.sleeptime sec, the last sleep>, "waketime": <kern.waketime sec, the last wake>,
+#    "awake": <whole seconds of CLOCK_UPTIME_RAW, a clock that stops while the Mac sleeps, so the
+#    difference between two readings is the time awake between them>}
 # or {"at": <epoch s>, "program": null} when no installed meter runs, or {"at": <epoch s>,
 # "error": <why>} when the run could not take a reading: no exit is silent. Once one meter process
 # has run seven days (by its own start time, a restart resets the count), every line from that
@@ -42,15 +44,17 @@ footprint=$(footprint -f bytes --noCategories -p "$pid" 2>/dev/null | sed -n 's/
 version=$(plutil -extract CFBundleShortVersionString raw "${program%/MacOS/*}/Info.plist" 2>/dev/null)
 sha=$(shasum -a 256 "$program" 2>/dev/null | cut -d' ' -f1)
 sleeptime=$(sysctl -n kern.sleeptime 2>/dev/null | sed -n 's/.*sec = \([0-9][0-9]*\).*/\1/p')
+awake=$(perl -MTime::HiRes=clock_gettime -e 'printf "%d", clock_gettime(8)' 2>/dev/null)
 waketime=$(sysctl -n kern.waketime 2>/dev/null | sed -n 's/.*sec = \([0-9][0-9]*\).*/\1/p')
 # The process must still be the one whose start time was read.
 [ "$(ps -o lstart= -p "$pid" | squeeze)" = "$started" ] || fail "the process at pid $pid changed while it was read"
 [ -n "$started" ] && [ -n "$row" ] || fail "ps read no start time or state for pid $pid"
 [ -n "$footprint" ] || fail "footprint read no phys_footprint for pid $pid"
 [ -n "$sleeptime" ] && [ -n "$waketime" ] || fail "sysctl read no kern.sleeptime or kern.waketime"
+[ -n "$awake" ] || fail "perl read no CLOCK_UPTIME_RAW"
 key=$(printf '"program":"%s","pid":%s,"started":"%s"' "$program" "$pid" "$started")
-printf '{"at":%s,%s,"stat":"%s","cpu":"%s","footprint":%s,"version":"%s","sha":"%s","sleeptime":%s,"waketime":%s}\n' \
-  "$now" "$key" "$stat" "$cpu" "$footprint" "$version" "$sha" "$sleeptime" "$waketime" >>"$log"
+printf '{"at":%s,%s,"stat":"%s","cpu":"%s","footprint":%s,"version":"%s","sha":"%s","sleeptime":%s,"waketime":%s,"awake":%s}\n' \
+  "$now" "$key" "$stat" "$cpu" "$footprint" "$version" "$sha" "$sleeptime" "$waketime" "$awake" >>"$log"
 since=$(date -j -f '%a %b %d %T %Y' "$started" +%s 2>/dev/null) || fail "date could not read the start time $started"
 if [ $((now - since)) -ge "$needed" ]; then
   # From this process's first reading to now, every line (null and error lines too).

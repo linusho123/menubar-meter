@@ -29,7 +29,7 @@ function week(over = {}) {
   for (let at = t0 + 600, i = 0; at <= t0 + 7 * DAY + 7200; at += 600, i++) {
     out.push({
       at, program: checks.INSTALLED, pid: 4242, started, stat: 'S', cpu: cpuText(10 + i * 3), footprint: 22 * MB,
-      version: VERSION, sha: SHA, sleeptime: t0 - 1000, waketime: t0 - 999,
+      version: VERSION, sha: SHA, sleeptime: t0 - 1000, waketime: t0 - 999, awake: at - t0,
     });
   }
   return typeof over === 'function' ? over(out, t0) : out;
@@ -58,16 +58,36 @@ test('judgeSoak: a sample 45 minutes after the last, with no sleep between, fail
   assert.match(all(r), /gap/);
 });
 
-test('judgeSoak: the same gap across a sleep is not a hole (sleep is not awake time)', () => {
-  const r = judge(week((s, t0) => {
-    const from = s.findIndex((x) => x.at > t0 + 2 * DAY);
-    const slept = s.slice(from, from + 54); // 9 hours of samples gone
-    const gone = new Set(slept);
-    const sleptAt = slept[0].at;
-    const wokeAt = slept.at(-1).at + 600;
-    return s.filter((x) => !gone.has(x)).map((x) => (x.at >= wokeAt ? { ...x, sleeptime: sleptAt + 30, waketime: wokeAt - 30 } : x));
-  }));
+/** A week with nights asleep: no readings from 23:00 to 07:00 (480 min) each day, the awake clock stopped, kern.sleeptime/waketime moved by darkwakes. */
+function nightly(samples, t0) {
+  let slept = 0;
+  const out = [];
+  let prev = null;
+  for (const x of samples) {
+    const hour = ((x.at - t0) % DAY) / 3600;
+    const night = hour >= 16 && hour < 24; // 8 h of every day
+    if (night) continue;
+    if (prev !== null && x.at - prev > 700) slept += x.at - prev - 600;
+    prev = x.at;
+    // Darkwakes every 13 min overnight move both values to the latest.
+    out.push({ ...x, awake: x.at - t0 - slept, sleeptime: x.at - 700, waketime: x.at - 650 });
+  }
+  return out;
+}
+
+test('judgeSoak: nights of darkwakes with no readings do not fail (the awake clock stops asleep)', () => {
+  const r = judge(week((s, t0) => nightly(s, t0)));
   assert.deepStrictEqual([r.given, r.then], [[], []], all(r));
+});
+
+test('judgeSoak: a 30-minute AWAKE gap (readings stopped while awake) fails', () => {
+  const r = judge(week((s) => s.filter((x, i) => i < 400 || i >= 403).map((x, i) => (i >= 400 ? { ...x, awake: x.awake } : x))));
+  assert.match(all(r), /gap/);
+});
+
+test('judgeSoak: a reboot mid-week fails (the awake clock goes back, uptime resets)', () => {
+  const r = judge(week((s) => s.map((x, i) => (i > 500 ? { ...x, awake: x.awake - 400000 } : x))));
+  assert.match(all(r), /restart|rebooted|went back/);
 });
 
 test('judgeSoak: two processes fail (a restart resets the count)', () => {

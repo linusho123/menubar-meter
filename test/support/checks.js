@@ -101,17 +101,20 @@ function judgeSoak(report, { version, sevenDays = 7 * DAY } = {}) {
   for (let i = 1; i < live.length; i++) {
     const prev = live[i - 1];
     const cur = live[i];
-    if (cur.sleeptime === undefined || cur.waketime === undefined) {
-      gapProblem ||= 'readings lack kern.sleeptime/kern.waketime: sleep cannot be told from a hole';
+    if (!Number.isFinite(cur.awake) || !Number.isFinite(prev.awake)) {
+      gapProblem ||= 'readings lack the awake clock: sleep cannot be told from a hole';
       continue;
     }
-    const slept = cur.waketime > prev.at;
-    const before = slept ? cur.sleeptime - prev.at : cur.at - prev.at;
-    const after = slept ? cur.at - cur.waketime : 0;
-    if (before > SOAK_GAP || after > SOAK_GAP) {
-      gapProblem ||= `an awake gap of ${(Math.max(before, after) / 60).toFixed(0)} min with no reading, at ${new Date(prev.at * 1000).toISOString()} (the limit is 20 min)`;
+    // The awake clock (CLOCK_UPTIME_RAW) stops while the Mac sleeps, darkwakes included, so its
+    // difference is the time awake between the readings; going backwards is a reboot.
+    const awakeSecs = cur.awake - prev.awake;
+    if (awakeSecs < 0) {
+      gapProblem ||= `the Mac restarted (the awake clock went back) at ${new Date(cur.at * 1000).toISOString()}: the meter's uptime ended`;
+      continue;
     }
-    const awakeSecs = awakeBetween(prev, cur);
+    if (awakeSecs > SOAK_GAP) {
+      gapProblem ||= `an awake gap of ${(awakeSecs / 60).toFixed(0)} min with no reading, at ${new Date(prev.at * 1000).toISOString()} (the limit is 20 min)`;
+    }
     awake += awakeSecs;
     if (awakeSecs >= SOAK_CPU_AFTER && !cpuProblem) {
       try {

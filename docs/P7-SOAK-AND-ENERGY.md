@@ -42,15 +42,14 @@ The rulings of 2026-10-22 these checks follow:
 refuses to run beside a meter it didn't start (and quitting the meter for it would restart the
 soak's seven days). Restarting the Mac, or a crash that the keep-alive relaunches, also starts
 the seven days over: the soak counts from the running meter's own start time and waits for one
-process seven days old. Sleep is fine; the meter keeps running through it.
+process seven days old. Sleep is fine: the meter keeps running through it, and the soak measures gaps in time awake, not wall time.
 
 **What makes a soak report pass.** The report holds every reading from the process's first one to
 its seven-day one. It must show: one process (pid and start time) throughout, the installed
 `0.7.0` meter with one executable (sha) throughout, at least 7 days old by its own start time, every
 reading under 50.0 MB (the highest one, not only day 7's), no growth of more than 5 MB from the
 first day's highest reading to the last day's, the meter's CPU time advancing while the Mac is
-awake and its state never stopped, and **no awake gap over 20 minutes** between readings (time the
-Mac slept, from `kern.sleeptime` and `kern.waketime`, is not a gap). A line saying the meter
+awake and its state never stopped, and **no awake gap over 20 minutes** between readings (each reading records an awake clock, `CLOCK_UPTIME_RAW`, which stops while the Mac sleeps, darkwakes included; gaps are differences of that clock, so nights asleep are not gaps; a reboot makes it go back and fails the report). A line saying the meter
 wasn't running, or one saying the soak couldn't read it (`{"error": …}`), inside the week shows a
 restart or a hole. The share of the week the Mac was awake is reported, not required.
 
@@ -94,8 +93,8 @@ macOS may show a "Background Items Added" notification for it; that is this agen
 Each run appends one line to `~/Library/Logs/menubar-meter-checks/soak.ndjson`: the meter's pid
 and start time (`ps -o lstart`), its state and CPU time (`ps -o stat,time`), its physical footprint
 in bytes (`footprint -f bytes --noCategories`, the `phys_footprint` figure that Activity Monitor's
-Memory column shows), its version and the sha of its executable, and the Mac's last sleep and
-wake (`kern.sleeptime`, `kern.waketime`). To look at it now and then:
+Memory column shows), its version and the sha of its executable, and the Mac's awake clock
+(`CLOCK_UPTIME_RAW`, read with the stock `perl`) and last sleep and wake. To look at it now and then:
 
 ```sh
 tail -3 ~/Library/Logs/menubar-meter-checks/soak.ndjson
