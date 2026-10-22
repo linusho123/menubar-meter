@@ -49,7 +49,7 @@ its seven-day one. It must show: one process (pid and start time) throughout, th
 `0.7.0` meter with one executable (sha) throughout, at least 7 days old by its own start time, every
 reading under 50.0 MB (the highest one, not only day 7's), no growth of more than 5 MB from the
 first day's highest reading to the last day's, the meter's CPU time advancing while the Mac is
-awake and its state never stopped, and **no awake gap over 20 minutes** between readings (each reading records an awake clock, `CLOCK_UPTIME_RAW`, which stops while the Mac sleeps, darkwakes included; gaps are differences of that clock, so nights asleep are not gaps; a reboot makes it go back and fails the report). A line saying the meter
+awake and its state never stopped, and **no awake gap over 20 minutes** between readings (each reading records an awake clock, `CLOCK_UPTIME_RAW`, which stops while the Mac sleeps and runs during its brief darkwakes; gaps are differences of that clock, so nights asleep are not gaps; a reboot makes it go back and fails the report). A line saying the meter
 wasn't running, or one saying the soak couldn't read it (`{"error": …}`), inside the week shows a
 restart or a hole. The share of the week the Mac was awake is reported, not required.
 

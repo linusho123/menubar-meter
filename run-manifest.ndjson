@@ -63,10 +63,10 @@
 {"file":"features/network-and-disk.feature","title":"Network and disk match Activity Monitor [1]","status":"passed"}
 {"file":"features/network-and-disk.feature","title":"Network and disk match Activity Monitor [2]","status":"passed"}
 {"file":"features/own-cost.feature","title":"The meter is never flagged as an energy hog","status":"unbound"}
-{"file":"features/own-cost.feature","title":"The meter's memory stays under its line [1]","status":"unbound"}
+{"file":"features/own-cost.feature","title":"The meter's memory stays under its line [1]","status":"passed"}
 {"file":"features/own-cost.feature","title":"The meter's memory stays under its line [2]","status":"unbound"}
-{"file":"features/own-cost.feature","title":"The meter's own CPU stays under its line [1]","status":"unbound"}
-{"file":"features/own-cost.feature","title":"The meter's own CPU stays under its line [2]","status":"unbound"}
+{"file":"features/own-cost.feature","title":"The meter's own CPU stays under its line [1]","status":"passed"}
+{"file":"features/own-cost.feature","title":"The meter's own CPU stays under its line [2]","status":"passed"}
 {"file":"features/presence.feature","title":"A quit meter stays gone until the next login","status":"passed"}
 {"file":"features/presence.feature","title":"Esc closes the panel opened by the shortcut","status":"passed"}
 {"file":"features/presence.feature","title":"Installing a newer version replaces the old one","status":"passed"}
