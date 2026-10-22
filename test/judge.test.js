@@ -93,3 +93,17 @@ test('judgeHour: a shortened hour scales the windows with it', () => {
   const short = Array.from({ length: 60 }, (_, m) => ({ at: t0 + m * unit, bytes: 20 * MB, panel: 'closed', stat: 'S', cpu: m, ax: true }));
   assert.deepStrictEqual(cost.judgeHour(short, { hourMs: 60 * unit }).problems, []);
 });
+
+// --- S3: the release check covers MeterCore, not only the Meter target ----------------------
+
+test('debugObjects: a MeterCore object compiled for debug is found (the check read only Meter.build)', () => {
+  const nm = [
+    '0000000000000000 - 00 0000    OSO /Users/x/repo/.build/arm64-apple-macosx/release/Meter.build/main.swift.o',
+    '0000000000000000 - 00 0000    OSO /Users/x/repo/.build/arm64-apple-macosx/debug/MeterCore.build/Sampler.swift.o',
+    '0000000000000000 - 00 0000    OSO /Users/x/repo/.build/arm64-apple-macosx/release/MeterCore.build/Share.swift.o',
+    '0000000000000000 - 00 0000    OSO /usr/lib/other.o',
+  ].join('\n');
+  const r = cost.releaseObjects(nm);
+  assert.strictEqual(r.objects.length, 3);
+  assert.deepStrictEqual(r.debug, ['/Users/x/repo/.build/arm64-apple-macosx/debug/MeterCore.build/Sampler.swift.o']);
+});

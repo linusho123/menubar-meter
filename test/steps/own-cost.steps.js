@@ -32,11 +32,9 @@ const required = (value, what) => {
 function assertReleaseBuild(pid) {
   const program = run('ps', ['-o', 'comm=', '-p', String(pid)]).trim();
   assert.strictEqual(program, paths.releaseApp, `ps: the meter measured runs ${program}`);
-  const objects = run('nm', ['-ap', program]).split('\n').filter((l) => / OSO /.test(l))
-    .map((l) => l.replace(/^.* OSO /, '')).filter((o) => /\/Meter\.build\//.test(o));
+  const { objects, debug } = cost.releaseObjects(run('nm', ['-ap', program]));
   assert.ok(objects.length > 0, 'the release program records the objects it was linked from');
-  const debug = objects.filter((o) => !/\/release\/Meter\.build\//.test(o));
-  assert.deepStrictEqual(debug, [], 'every object of the program measured was compiled for release');
+  assert.deepStrictEqual(debug, [], 'every object of the program measured (Meter and MeterCore) was compiled for release');
   const bytes = fs.readFileSync(program);
   for (const marker of ['10TestInputs', 'feedPath']) {
     assert.ok(!bytes.includes(marker), `the program measured has no test reading source (${marker})`);

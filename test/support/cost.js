@@ -81,6 +81,16 @@ function axAlive(pid) {
   }
 }
 
+/**
+ * The objects a program was linked from, as `nm -ap` records them (the debug-map "OSO" lines): every
+ * path under a .build folder, whatever its target (Meter, MeterCore), and those among them not
+ * compiled in the release configuration.
+ */
+function releaseObjects(nmOutput) {
+  const objects = nmOutput.split('\n').filter((l) => / OSO /.test(l)).map((l) => l.replace(/^.* OSO /, '')).filter((o) => /\/\.build\//.test(o));
+  return { objects, debug: objects.filter((o) => !/\/release\//.test(o)) };
+}
+
 const MB = 1048576;
 /** A footprint as Activity Monitor's Memory column shows it: megabytes of 1,048,576 bytes, one decimal. */
 const shownMB = (bytes) => `${(Math.round((bytes / MB) * 10) / 10).toFixed(1)} MB`;
@@ -169,4 +179,4 @@ function memory(pid) {
   return JSON.parse(run(paths.meterCost, ['footprint'], out));
 }
 
-module.exports = { cpuOver, memory, psTime, psStatTime, cpuSeconds, liveness, axAlive, judgeHour, shownMB, underLine };
+module.exports = { cpuOver, memory, psTime, psStatTime, cpuSeconds, liveness, axAlive, judgeHour, releaseObjects, shownMB, underLine };
