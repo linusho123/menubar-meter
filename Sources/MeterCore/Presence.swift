@@ -28,8 +28,9 @@ public enum KeepAlive {
     }
   }
 
-  /// The LaunchAgent property list for the job labelled `label`, run from the bundle's own
-  /// program with `--agent`. It encodes `relaunches(after:)` for launchd.
+  /// The LaunchAgent property list for the job labelled `label`, running `program` (the
+  /// installed bundle's own executable, by its full path) with `--agent`. It encodes
+  /// `relaunches(after:)` for launchd.
   public static func agentPlist(label: String, program: String) -> String {
     """
     <?xml version="1.0" encoding="UTF-8"?>
@@ -37,12 +38,10 @@ public enum KeepAlive {
     <plist version="1.0">
     <dict>
     \t<key>Label</key>
-    \t<string>\(label)</string>
-    \t<key>BundleProgram</key>
-    \t<string>\(program)</string>
+    \t<string>\(escaped(label))</string>
     \t<key>ProgramArguments</key>
     \t<array>
-    \t\t<string>\(program)</string>
+    \t\t<string>\(escaped(program))</string>
     \t\t<string>\(Presence.agentArgument)</string>
     \t</array>
     \t<key>RunAtLoad</key>
@@ -62,6 +61,19 @@ public enum KeepAlive {
     </plist>
 
     """
+  }
+
+  private static func escaped(_ text: String) -> String {
+    var out = ""
+    for character in text {
+      switch character {
+      case "&": out += "&amp;"
+      case "<": out += "&lt;"
+      case ">": out += "&gt;"
+      default: out.append(character)
+      }
+    }
+    return out
   }
 }
 
@@ -133,9 +145,9 @@ public enum Presence {
   public enum OpenerAction: Equatable, Sendable {
     /// No meter runs: start the login job.
     case start
-    /// An older meter runs (or one whose version is unknown): restart the login job, so the
-    /// newer copy on disk replaces it.
-    case restart
+    /// An older meter runs (or one whose version is unknown): replace it with the copy just
+    /// opened, which loads the login job afresh and starts it.
+    case replace
     /// The same version, or a newer one, already runs: leave it be.
     case leave
   }
@@ -144,8 +156,8 @@ public enum Presence {
   /// unreadable version as an empty string), `opened` the version of the copy just opened.
   public static func openerAction(running: String?, opened: String) -> OpenerAction {
     guard let running else { return .start }
-    guard let old = AppVersion(running), let new = AppVersion(opened) else { return .restart }
-    return old < new ? .restart : .leave
+    guard let old = AppVersion(running), let new = AppVersion(opened) else { return .replace }
+    return old < new ? .replace : .leave
   }
 }
 

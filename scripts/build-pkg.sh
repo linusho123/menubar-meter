@@ -1,7 +1,10 @@
 #!/bin/sh
 # Packages an app bundle as the one install step (D83): an installer package that puts it in
 # /Applications, then opens it as the user at the screen, which registers its login job with
-# macOS and starts it. Usage: build-pkg.sh <Meter.app> <out.pkg>
+# macOS and starts it. Usage: build-pkg.sh <Meter.app> <out.pkg> [home]
+# With `home` (the harness's packages only) the package may also install into the user's own
+# home folder, so a test runs the real installer without an administrator password; the
+# release package installs only for the whole Mac, in /Applications.
 set -eu
 cd "$(dirname "$0")/.."
 app=$1
@@ -20,4 +23,9 @@ plutil -replace 0.BundleOverwriteAction -string upgrade "$work/components.plist"
 pkgbuild --quiet --root "$work/root" --component-plist "$work/components.plist" \
   --install-location /Applications --scripts app/pkg-scripts \
   --identifier "$id.pkg" --version "$version" "$work/Meter-component.pkg"
-productbuild --quiet --package "$work/Meter-component.pkg" "$out"
+productbuild --quiet --synthesize --package "$work/Meter-component.pkg" "$work/dist.xml"
+home=false
+if [ "${3:-}" = home ]; then home=true; fi
+# One step: no choices to make, the title the installer shows.
+sed -i '' "s|<options |<title>Meter</title><domains enable_localSystem=\"true\" enable_currentUserHome=\"$home\" enable_anywhere=\"false\"/><options |" "$work/dist.xml"
+productbuild --quiet --distribution "$work/dist.xml" --package-path "$work" "$out"

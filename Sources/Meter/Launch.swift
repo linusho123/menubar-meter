@@ -1,15 +1,15 @@
 import Foundation
 import MeterCore
-import ServiceManagement
 
 /// How this copy of the meter was started, and what it does about it (D42, D77, D83, D84).
 ///
-/// - The login job (`--agent`): launchd starts it at every login and relaunches it after a crash
-///   but not after `Quit Meter`; it is the meter. A crash loop is stopped by `CrashBackoff`.
+/// - The login job (`--agent`): the user's own LaunchAgent, which launchd starts at every login
+///   and relaunches after a crash but not after `Quit Meter`; it is the meter. A crash loop is
+///   stopped by `CrashBackoff`.
 /// - Opened by the user or by the installer (started by launchd for LaunchServices, so its
-///   parent is process 1): it registers the login job with macOS (Background Task Management),
-///   starts it, or restarts it when an older version runs, and exits. If macOS will not run the
-///   login job (the user turned it off), it is the meter itself, without the keep-alive.
+///   parent is process 1): it writes the login job for its own program, loads it (which starts
+///   it, replacing an older meter that runs) and exits. If launchd will not load the job (the
+///   user turned the meter off in Login Items), it is the meter itself, without the keep-alive.
 /// - Started by another program (the test harness, a terminal): it is the meter, no more.
 enum Launch {
   enum Role {
@@ -23,7 +23,7 @@ enum Launch {
     return getppid() == 1 ? .opener : .plain
   }
 
-  /// The login job's label: the bundle's identifier, so a renamed copy is its own job.
+  /// The login job's label: the bundle's identifier.
   static var label: String { Bundle.main.bundleIdentifier ?? "local.menubar-meter.Meter" }
   static var version: String {
     Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
@@ -48,51 +48,50 @@ enum Launch {
 
   // MARK: Opened
 
-  /// Registers and starts the login job. Returns false when macOS will not run it, so this copy
-  /// runs as the meter itself.
+  /// Writes, loads and so starts the login job for this copy. Returns false when launchd will
+  /// not run it, so this copy runs as the meter itself.
   static func handOver() -> Bool {
-    let service = SMAppService.agent(plistName: "\(label).plist")
-    let wasEnabled = service.status == .enabled
-    if !wasEnabled {
-      do {
-        try service.register()
-      } catch {
-        FileHandle.standardError.write(Data("meter: login item not registered: \(error)\n".utf8))
-      }
-    }
-    guard service.status == .enabled else { return false }
-
-    // Opening the meter by hand lifts a back-off that kept a crashing meter down.
     var state = State.load()
-    state.starts = []
-    state.save()
-
     let running = jobPID()
     let runningVersion: String? = running.map { $0 == state.pid ? state.version ?? "" : "" }
-    switch Presence.openerAction(running: wasEnabled ? runningVersion : nil, opened: version) {
-    case .start: kickstart(restart: false)
-    case .restart: kickstart(restart: true)
-    case .leave: break
+    if Presence.openerAction(running: runningVersion, opened: version) == .leave { return true }
+
+    guard let program = Bundle.main.executableURL?.resolvingSymlinksInPath().path else {
+      return false
     }
+    let plist = KeepAlive.agentPlist(label: label, program: program)
+    // Taking the old job out ends an older meter that still runs (D84); loading the new one
+    // starts it at once (RunAtLoad), and launchd loads it again at every login (D42).
+    _ = launchctl(["bootout", domain])
+    do {
+      try FileManager.default.createDirectory(
+        at: agentFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try Data(plist.utf8).write(to: agentFile, options: .atomic)
+    } catch {
+      FileHandle.standardError.write(Data("meter: login job not written: \(error)\n".utf8))
+      return false
+    }
+    // Opening the meter by hand lifts a back-off that kept a crashing meter down.
+    state.starts = []
+    state.save()
+    let (status, _) = launchctl(["bootstrap", "gui/\(getuid())", agentFile.path])
+    guard status == 0 || jobLoaded() else {
+      FileHandle.standardError.write(Data("meter: login job not loaded (\(status))\n".utf8))
+      return false
+    }
+    _ = launchctl(["kickstart", domain])
     return true
   }
 
-  #if METER_TEST_SOURCE
-    /// Test builds only: unregisters the login job, which also stops it. Returns 0 once macOS
-    /// no longer lists it.
-    static func unregister() -> Int32 {
-      let service = SMAppService.agent(plistName: "\(label).plist")
-      do {
-        try service.unregister()
-      } catch {
-        FileHandle.standardError.write(Data("meter: unregister: \(error)\n".utf8))
-      }
-      try? FileManager.default.removeItem(at: State.file.deletingLastPathComponent())
-      return service.status == .notRegistered || service.status == .notFound ? 0 : 1
-    }
-  #endif
+  /// The user's own LaunchAgent for the meter.
+  static var agentFile: URL {
+    FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent("Library/LaunchAgents/\(label).plist")
+  }
 
   private static var domain: String { "gui/\(getuid())/\(label)" }
+
+  private static func jobLoaded() -> Bool { launchctl(["print", domain]).0 == 0 }
 
   /// The process id launchd runs the login job as, nil when it is not running.
   private static func jobPID() -> Int32? {
@@ -105,10 +104,6 @@ enum Launch {
       if parts.count == 2, parts[0] == "pid", let pid = Int32(parts[1]) { return pid }
     }
     return nil
-  }
-
-  private static func kickstart(restart: Bool) {
-    _ = launchctl(restart ? ["kickstart", "-k", domain] : ["kickstart", domain])
   }
 
   private static func launchctl(_ arguments: [String]) -> (Int32, String) {

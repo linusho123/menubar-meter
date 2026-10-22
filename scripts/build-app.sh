@@ -13,15 +13,11 @@ cd "$(dirname "$0")/.."
 bundle() { # <binary> <bundle path> [identifier] [version]
   id=${3:-local.menubar-meter.Meter}
   rm -rf "$2"
-  mkdir -p "$2/Contents/MacOS" "$2/Contents/Library/LaunchAgents"
+  mkdir -p "$2/Contents/MacOS"
   cp app/Info.plist "$2/Contents/Info.plist"
   plutil -replace CFBundleIdentifier -string "$id" "$2/Contents/Info.plist"
   if [ -n "${4:-}" ]; then plutil -replace CFBundleShortVersionString -string "$4" "$2/Contents/Info.plist"; fi
   cp "$1" "$2/Contents/MacOS/Meter"
-  # The login job macOS starts at every login and keeps alive after a crash, labelled by the
-  # bundle's identifier, written from the meter's own rules (KeepAlive in MeterCore).
-  "$1" --launch-agent-plist "$id" >"$2/Contents/Library/LaunchAgents/$id.plist"
-  plutil -lint -s "$2/Contents/Library/LaunchAgents/$id.plist"
   codesign --force --sign - "$2" >/dev/null 2>&1
 }
 
@@ -38,14 +34,18 @@ bundle .build/test/release/Meter build/test/Meter.app
 # The installer: build/Meter.pkg installs the release app in /Applications, registers its login
 # job and opens it (D83); the same package over an older copy replaces it (D84).
 sh scripts/build-pkg.sh build/Meter.app build/Meter.pkg
-# The harness's packages: the test app under its own identifier (never the installed meter's),
-# an older and a newer version, installed only into scratch folders.
+# The harness's packages: the release program under its own identifier (never the installed
+# meter's), an older and a newer version, installed only into the user's home folder. Their
+# bundles are made in a temporary folder and removed, so no second copy is left about.
 pkgtest=local.menubar-meter.Meter.pkgtest
+rm -rf build/test/pkg
 mkdir -p build/test/pkg
+staging=$(mktemp -d)
 for v in 0.0.1 0.0.2; do
-  bundle .build/test/release/Meter "build/test/pkg/$v/Meter.app" "$pkgtest" "$v"
-  sh scripts/build-pkg.sh "build/test/pkg/$v/Meter.app" "build/test/pkg/Meter-$v.pkg"
+  bundle .build/release/Meter "$staging/$v/Meter.app" "$pkgtest" "$v"
+  sh scripts/build-pkg.sh "$staging/$v/Meter.app" "build/test/pkg/Meter-$v.pkg" home
 done
+rm -rf "$staging"
 
 # The stand-in app: the stand-in program bundled as an app named Xcode, with its own identifier.
 standin=build/test/standins/Xcode.app
