@@ -12,6 +12,7 @@ const path = require('node:path');
 const { execFileSync, spawnSync } = require('node:child_process');
 const presence = require('./support/presence');
 const procs = require('./support/procs');
+const menubar = require('./support/menubar');
 
 const NEWER = '0.0.2';
 
@@ -93,5 +94,37 @@ test('opening the installed copy takes the job back from another copy of the sam
       const back = await presence.running(15000);
       assert.strictEqual(back.ppid, 1);
       assert.notStrictEqual(presence.job().lastExit, '78: EX_CONFIG');
+    });
+  });
+
+test('a meter opened while the job cannot load is the only meter running',
+  { timeout: 400000 }, async () => {
+    await withWorld(async (world) => {
+      await presence.install(world, NEWER);
+      const first = await presence.running();
+      const label = presence.LABEL;
+      const domain = `gui/${process.getuid()}`;
+      // As if the meter were switched off in Login Items: launchd will not load the job.
+      world.defer(async () => {
+        spawnSync('/bin/launchctl', ['enable', `${domain}/${label}`]);
+        const disabled = spawnSync('/bin/launchctl', ['print-disabled', domain], { encoding: 'utf8' }).stdout;
+        assert.doesNotMatch(disabled, new RegExp(`"${label.replace(/\./g, '\\.')}" => disabled`),
+          'the job is enabled again');
+      });
+      assert.strictEqual(spawnSync('/bin/launchctl', ['disable', `${domain}/${label}`]).status, 0);
+      presence.logOut();
+      await presence.until(() => presence.proc(first.pid) === null, 10000, 'the first meter to end');
+      spawnSync('/usr/bin/open', ['-n', presence.APP]);
+      await presence.until(() => presence.meterPids().length === 1, 15000, 'a meter to run on its own');
+      const [one] = presence.meterPids();
+      await presence.until(() => menubar.itemsOf(one).length === 1, 10000, 'the first meter\'s item in the menu bar');
+      spawnSync('/usr/bin/open', ['-n', presence.APP]);
+      // The newest open wins: the first plain meter ends, one meter is left.
+      await presence.until(() => presence.meterPids().length === 1 && presence.meterPids()[0] !== one,
+        15000, 'the older plain meter to end and the newest to run');
+      const [two] = presence.meterPids();
+      await procs.sleep(2000);
+      assert.deepStrictEqual(presence.meterPids(), [two], 'one meter process');
+      assert.strictEqual(presence.meterItems().length, 1, 'one item in the menu bar');
     });
   });

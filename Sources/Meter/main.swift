@@ -4,7 +4,9 @@ import MeterCore
 let arguments = CommandLine.arguments
 switch Launch.role(arguments: arguments) {
 case .agent: Launch.agentStarts()
-case .opener: if Launch.handOver() { exit(0) }
+case .opener:
+  if Launch.handOver() { exit(0) }
+  Launch.endOtherCopies()
 case .plain: break
 }
 

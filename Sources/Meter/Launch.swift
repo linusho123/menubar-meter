@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import MeterCore
 
@@ -84,6 +85,22 @@ enum Launch {
     }
     _ = launchctl(["kickstart", domain])
     return true
+  }
+
+  /// This copy runs as the meter itself because launchd will not run the login job: it first
+  /// ends every other meter with this bundle identifier that is not the login job's, so the
+  /// newest open wins and the menu bar never holds two items.
+  static func endOtherCopies() {
+    let own = getpid()
+    let jobPid = jobInfo()?.pid
+    let others = NSRunningApplication.runningApplications(withBundleIdentifier: label)
+      .filter { $0.processIdentifier != own && $0.processIdentifier != jobPid }
+    for other in others { other.terminate() }
+    let deadline = Date().addingTimeInterval(3)
+    while Date() < deadline && others.contains(where: { !$0.isTerminated }) {
+      RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+    }
+    for other in others where !other.isTerminated { other.forceTerminate() }
   }
 
   /// The user's own LaunchAgent for the meter.
