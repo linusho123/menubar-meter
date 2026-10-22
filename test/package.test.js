@@ -42,6 +42,7 @@ for (const [pkg, version] of [
     const p = expand(pkg);
     assert.match(p.info, /install-location="\/Applications"/);
     assert.match(p.info, /relocatable="false"/);
+    assert.match(p.info, /<relocate\/>/, "no bundle may be relocated to another copy with the same identifier");
     assert.match(p.info, /<upgrade-bundle>\s*<bundle id="local\.menubar-meter\.Meter"\/>/);
     assert.match(p.info, new RegExp(`identifier="${RELEASE_ID}\\.pkg"`));
     assert.match(p.info, new RegExp(`version="${version.replace(/\./g, '\\.')}"`));
