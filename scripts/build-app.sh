@@ -8,6 +8,7 @@
 # and builds the harness helpers (meter-ax, meter-neighbor, meter-gpu-load, meter-standin) into
 # .build/release.
 set -eu
+umask 022
 cd "$(dirname "$0")/.."
 
 bundle() { # <binary> <bundle path> [identifier] [version]
@@ -18,6 +19,7 @@ bundle() { # <binary> <bundle path> [identifier] [version]
   plutil -replace CFBundleIdentifier -string "$id" "$2/Contents/Info.plist"
   if [ -n "${4:-}" ]; then plutil -replace CFBundleShortVersionString -string "$4" "$2/Contents/Info.plist"; fi
   cp "$1" "$2/Contents/MacOS/Meter"
+  chmod 755 "$2/Contents/MacOS/Meter"
   codesign --force --sign - "$2" >/dev/null 2>&1
 }
 

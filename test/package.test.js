@@ -29,6 +29,12 @@ function expand(pkg) {
     distribution: read(path.join(out, 'Distribution')),
     scripts: files(path.join(component, 'Scripts')),
     payload,
+    // Every entry as the installer will lay it down: path, octal mode (with type bits), uid, gid.
+    entries: execFileSync('lsbom', ['-p', 'fmug', path.join(component, 'Bom')], { encoding: 'utf8' })
+      .split('\n').filter(Boolean).map((l) => {
+        const [f, mode, uid, gid] = l.split('\t');
+        return { f, mode: parseInt(mode, 8), uid: Number(uid), gid: Number(gid) };
+      }),
   };
   fs.rmSync(dir, { recursive: true, force: true });
   return result;
@@ -57,5 +63,33 @@ for (const [pkg, version] of [
     assert.deepStrictEqual(p.scripts, ['postinstall'], 'the postinstall, and no AppleDouble leftovers');
     assert.match(p.distribution, /enable_currentUserHome="false"/);
     assert.match(p.distribution, /enable_localSystem="true"/);
+  });
+}
+
+// The installer chowns the payload to root and keeps its modes, so what the build's umask left
+// in the bundle (a 700 executable under umask 077) became an app the user could not run. The
+// harness installs into ~/Applications as the user and cannot see this; pin it here.
+for (const pkg of [
+  path.join(paths.root, 'build', 'Meter.pkg'),
+  path.join(paths.root, 'build', 'check', 'Meter-0.0.9.pkg'),
+]) {
+  test(`${path.relative(paths.root, pkg)} installs a world-readable, world-executable app owned by root`, () => {
+    const { entries } = expand(pkg);
+    assert.ok(entries.length > 5, 'the payload has entries');
+    for (const { f, mode, uid, gid } of entries) {
+      const perm = mode & 0o777;
+      const isDir = (mode & 0o170000) === 0o040000;
+      const shown = `${f} is ${perm.toString(8)}`;
+      assert.strictEqual(uid, 0, `${f} owned by uid 0`);
+      assert.strictEqual(gid, 0, `${f} owned by gid 0`);
+      if (isDir) assert.strictEqual(perm, 0o755, shown);
+      else assert.ok((perm & 0o644) === 0o644, `${shown}, at least 644`);
+      if (/\/\._/.test(f) || /\/\.__/.test(f)) continue;
+      if (f === './Meter.app/Contents/MacOS/Meter' || /\/MacOS\//.test(f) || /\.(sh|dylib)$/.test(f)) {
+        assert.strictEqual(perm, 0o755, `${shown}, an executable must be 755`);
+      }
+    }
+    const meter = entries.find((e) => e.f === './Meter.app/Contents/MacOS/Meter');
+    assert.ok(meter && (meter.mode & 0o777) === 0o755, 'Meter is 755');
   });
 }

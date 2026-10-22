@@ -6,6 +6,9 @@
 # home folder, so a test runs the real installer without an administrator password; the
 # release package installs only for the whole Mac, in /Applications.
 set -eu
+# The package keeps the staged modes and the installer owns them to root, so they must not
+# depend on the caller's umask.
+umask 022
 # No AppleDouble (._*) files in the package from extended attributes.
 export COPYFILE_DISABLE=1
 cd "$(dirname "$0")/.."
@@ -18,6 +21,9 @@ trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/root"
 ditto --noextattr --noqtn "$app" "$work/root/Meter.app"
 xattr -cr "$work/root/Meter.app"
+# Directories 755, files 644, programs 755, whatever the build's umask left.
+chmod -R u=rwX,go=rX "$work/root"
+chmod 755 "$work/root/Meter.app/Contents/MacOS/"*
 pkgbuild --analyze --root "$work/root" "$work/components.plist" >/dev/null
 # Never relocatable: the installer must not look for another copy with the same identifier (a
 # build folder, a copy in Downloads) and update that one instead, leaving two copies.
