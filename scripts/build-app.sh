@@ -5,8 +5,8 @@
 #   build/test/Meter.app   the test app: the test reading source compiled in (-DMETER_TEST_SOURCE)
 #   build/test/standins/Xcode.app   the harness's stand-in app (never the real Xcode): an app that
 #                          records the quit request it receives
-# and builds the harness helpers (meter-ax, meter-neighbor, meter-gpu-load, meter-standin) into
-# .build/release.
+# and builds the harness helpers (meter-ax, meter-neighbor, meter-gpu-load, meter-standin,
+# meter-cost) into .build/release.
 set -eu
 umask 022
 cd "$(dirname "$0")/.."
@@ -28,6 +28,7 @@ swift build -c release --product meter-ax
 swift build -c release --product meter-neighbor
 swift build -c release --product meter-gpu-load
 swift build -c release --product meter-standin
+swift build -c release --product meter-cost
 bundle .build/release/Meter build/Meter.app
 
 swift build -c release --product Meter --scratch-path .build/test -Xswiftc -DMETER_TEST_SOURCE
