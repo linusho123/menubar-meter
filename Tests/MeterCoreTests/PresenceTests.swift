@@ -140,13 +140,60 @@ struct AppVersionTests {
     }
   }
 
+  private static let installed = "/Applications/Meter.app/Contents/MacOS/Meter"
+  private static let elsewhere = "/Users/u/build/Meter.app/Contents/MacOS/Meter"
+
   @Test("what an opened copy does with the meter that runs")
   func openerAction() {
-    #expect(Presence.openerAction(running: nil, opened: "0.0.2") == .start)
-    #expect(Presence.openerAction(running: "0.0.1", opened: "0.0.2") == .replace)
-    #expect(Presence.openerAction(running: "0.0.2", opened: "0.0.2") == .leave)
-    #expect(Presence.openerAction(running: "0.0.3", opened: "0.0.2") == .leave)
-    #expect(Presence.openerAction(running: "", opened: "0.0.2") == .replace)
+    let here = Self.installed
+    #expect(
+      Presence.openerAction(running: nil, opened: "0.0.2", runningProgram: nil, openedProgram: here)
+        == .start)
+    #expect(
+      Presence.openerAction(
+        running: "0.0.1", opened: "0.0.2", runningProgram: here, openedProgram: here) == .replace)
+    #expect(
+      Presence.openerAction(
+        running: "", opened: "0.0.2", runningProgram: here, openedProgram: here) == .replace)
+  }
+
+  @Test("the same version from the same place is left be")
+  func sameVersionSamePlaceLeaves() {
+    let here = Self.installed
+    #expect(
+      Presence.openerAction(
+        running: "0.0.2", opened: "0.0.2", runningProgram: here, openedProgram: here) == .leave)
+  }
+
+  @Test("the same version from another copy takes the job over")
+  func sameVersionElsewhereReplaces() {
+    #expect(
+      Presence.openerAction(
+        running: "0.0.2", opened: "0.0.2", runningProgram: Self.elsewhere,
+        openedProgram: Self.installed) == .replace)
+    // An unknown program for the running job is not the same place.
+    #expect(
+      Presence.openerAction(
+        running: "0.0.2", opened: "0.0.2", runningProgram: nil, openedProgram: Self.installed)
+        == .replace)
+  }
+
+  @Test("a newer meter that runs is left be, wherever the opened copy lies")
+  func newerElsewhereLeaves() {
+    #expect(
+      Presence.openerAction(
+        running: "0.0.3", opened: "0.0.2", runningProgram: Self.elsewhere,
+        openedProgram: Self.installed) == .leave)
+  }
+
+  @Test("a copy run from a quarantined side-open (App Translocation) is recognised")
+  func translocated() {
+    #expect(
+      Presence.isTranslocated(
+        "/private/var/folders/ab/T/AppTranslocation/1234-ABCD/d/Meter.app/Contents/MacOS/Meter"))
+    #expect(!Presence.isTranslocated(Self.installed))
+    #expect(
+      !Presence.isTranslocated("/Users/u/AppTranslocationNotes/Meter.app/Contents/MacOS/Meter"))
   }
 }
 

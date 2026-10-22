@@ -60,3 +60,38 @@ test('a terminate request is a quit: the meter stays away; a crash still brings 
       assert.notStrictEqual(again.pid, back.pid);
     });
   });
+
+test('opening the installed copy takes the job back from another copy of the same version',
+  { timeout: 400000 }, async () => {
+    await withWorld(async (world) => {
+      await presence.install(world, NEWER);
+      const first = await presence.running();
+      // Another copy of the same version, opened while the job is off (as after a Login Items
+      // switch), takes the job over: it names the copy.
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'meter-samever-'));
+      const copy = path.join(dir, 'Meter.app');
+      const copyProgram = path.join(copy, 'Contents', 'MacOS', 'Meter');
+      execFileSync('ditto', [presence.APP, copy]);
+      world.defer(() => fs.rmSync(dir, { recursive: true, force: true }));
+      presence.logOut();
+      await presence.until(() => presence.proc(first.pid) === null, 10000, 'the first meter to end');
+      spawnSync('/usr/bin/open', ['-n', copy]);
+      await presence.until(() => presence.job().program === copyProgram && presence.job().pid, 15000,
+        'the job to run the other copy');
+      // The installed copy is opened (what the postinstall does): the job comes back to it.
+      spawnSync('/usr/bin/open', ['-n', presence.APP]);
+      await presence.until(() => {
+        const j = presence.job();
+        return j.program === presence.PROGRAM && j.pid && (presence.proc(j.pid) || {}).program === presence.PROGRAM;
+      }, 15000, 'the job to run the installed copy again');
+      assert.strictEqual(presence.agentPlist().ProgramArguments[0], presence.PROGRAM, 'the LaunchAgent names the installed copy');
+      // The other copy goes (a rebuild's rm -rf); the next login still starts the meter.
+      presence.logOut();
+      await presence.until(() => presence.meterPids().length === 0, 10000, 'the meter to end');
+      fs.rmSync(dir, { recursive: true, force: true });
+      presence.logInLoad();
+      const back = await presence.running(15000);
+      assert.strictEqual(back.ppid, 1);
+      assert.notStrictEqual(presence.job().lastExit, '78: EX_CONFIG');
+    });
+  });

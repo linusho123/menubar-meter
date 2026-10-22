@@ -162,16 +162,28 @@ public enum Presence {
     /// An older meter runs (or one whose version is unknown): replace it with the copy just
     /// opened, which loads the login job afresh and starts it.
     case replace
-    /// The same version, or a newer one, already runs: leave it be.
+    /// A newer meter runs, or the same version from this very copy: leave it be.
     case leave
   }
 
   /// `running` is the version of the meter the login job runs now (nil when none runs; an
-  /// unreadable version as an empty string), `opened` the version of the copy just opened.
-  public static func openerAction(running: String?, opened: String) -> OpenerAction {
+  /// unreadable version as an empty string) and `runningProgram` the program the job names;
+  /// `opened` and `openedProgram` are the copy just opened. The same version from another copy
+  /// takes the job over, so the job never stays on a copy that is later removed.
+  public static func openerAction(
+    running: String?, opened: String, runningProgram: String?, openedProgram: String
+  ) -> OpenerAction {
     guard let running else { return .start }
     guard let old = AppVersion(running), let new = AppVersion(opened) else { return .replace }
-    return old < new ? .replace : .leave
+    if old < new { return .replace }
+    if new < old { return .leave }
+    return runningProgram == openedProgram ? .leave : .replace
+  }
+
+  /// Whether `path` lies in a quarantined side-open's private copy (App Translocation): such a
+  /// copy runs as the meter itself and never writes the login job, since its path vanishes.
+  public static func isTranslocated(_ path: String) -> Bool {
+    path.split(separator: "/").contains("AppTranslocation")
   }
 }
 

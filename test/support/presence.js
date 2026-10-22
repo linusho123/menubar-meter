@@ -49,16 +49,17 @@ function assertOurs() {
   if (id !== null && id !== LABEL) throw new Error(`${APP} is ${id}, not the harness's own; refusing to touch it`);
 }
 
-/** launchd's job: { loaded, pid, runs, lastExit } (pid null when not running). */
+/** launchd's job: { loaded, pid, runs, lastExit, program } (pid null when not running). */
 function job() {
   const r = run('/bin/launchctl', ['print', JOB]);
-  if (r.status !== 0) return { loaded: false, pid: null, runs: 0, lastExit: null };
+  if (r.status !== 0) return { loaded: false, pid: null, runs: 0, lastExit: null, program: null };
   const field = (name) => {
     const m = new RegExp(`^\\t${name} = (.+)$`, 'm').exec(r.stdout);
     return m ? m[1] : null;
   };
   const pid = field('pid');
-  return { loaded: true, pid: pid ? Number(pid) : null, runs: Number(field('runs') || 0), lastExit: field('last exit code') };
+  return { loaded: true, pid: pid ? Number(pid) : null, runs: Number(field('runs') || 0), lastExit: field('last exit code'),
+    program: field('program') };
 }
 
 /** What `ps` shows for a process: { ppid, started, program }, or null when it is gone. */

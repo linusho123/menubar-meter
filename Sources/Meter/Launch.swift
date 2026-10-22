@@ -52,14 +52,16 @@ enum Launch {
   /// Writes, loads and so starts the login job for this copy. Returns false when launchd will
   /// not run it, so this copy runs as the meter itself.
   static func handOver() -> Bool {
+    guard let program = Bundle.main.executableURL?.resolvingSymlinksInPath().path,
+      !Presence.isTranslocated(program)
+    else { return false }
     var state = State.load()
-    let running = jobPID()
-    let runningVersion: String? = running.map { $0 == state.pid ? state.version ?? "" : "" }
-    if Presence.openerAction(running: runningVersion, opened: version) == .leave { return true }
-
-    guard let program = Bundle.main.executableURL?.resolvingSymlinksInPath().path else {
-      return false
-    }
+    let job = jobInfo()
+    let runningVersion: String? = job?.pid.map { $0 == state.pid ? state.version ?? "" : "" }
+    let action = Presence.openerAction(
+      running: runningVersion, opened: version, runningProgram: job?.program,
+      openedProgram: program)
+    if action == .leave { return true }
     let plist = KeepAlive.agentPlist(label: label, program: program)
     // Taking the old job out ends an older meter that still runs (D84); loading the new one
     // starts it at once (RunAtLoad), and launchd loads it again at every login (D42).
@@ -94,17 +96,24 @@ enum Launch {
 
   private static func jobLoaded() -> Bool { launchctl(["print", domain]).0 == 0 }
 
-  /// The process id launchd runs the login job as, nil when it is not running.
-  private static func jobPID() -> Int32? {
+  /// What launchd says about the login job: the process id it runs as (nil when not running)
+  /// and the program it names; nil when no job is loaded.
+  private static func jobInfo() -> (pid: Int32?, program: String?)? {
     let (status, output) = launchctl(["print", domain])
     guard status == 0 else { return nil }
+    var pid: Int32?
+    var program: String?
     for line in output.split(separator: "\n") {
+      // The job's own fields sit one tab in; nested blocks sit deeper.
+      guard line.hasPrefix("\t"), !line.hasPrefix("\t\t") else { continue }
       let parts = line.split(separator: "=", maxSplits: 1).map {
         $0.trimmingCharacters(in: .whitespaces)
       }
-      if parts.count == 2, parts[0] == "pid", let pid = Int32(parts[1]) { return pid }
+      guard parts.count == 2 else { continue }
+      if parts[0] == "pid" { pid = Int32(parts[1]) }
+      if parts[0] == "program" { program = parts[1] }
     }
-    return nil
+    return (pid, program)
   }
 
   private static func launchctl(_ arguments: [String]) -> (Int32, String) {
