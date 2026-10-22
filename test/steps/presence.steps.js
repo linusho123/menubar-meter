@@ -221,7 +221,7 @@ module.exports = (reg) => {
     // The geometry a click gives, to compare the shortcut's with.
     w.clickedFrame = windowsOf(w.meter.pid)[0];
     w.item = menubar.itemsOf(w.meter.pid)[0];
-    await panel.click(w.meter.pid).catch(() => {});
+    await panel.press(w.meter.pid);
     await panelBecomes(w.meter.pid, false, 2000);
     await frontStandIn(w);
   });

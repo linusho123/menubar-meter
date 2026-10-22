@@ -69,10 +69,16 @@ function captureNow(pid, item = null) {
   }
 }
 
-/** Clicks the menu bar item (an Accessibility press, as an assistive app clicks it). */
-async function click(pid) {
+/** Presses the menu bar item without waiting for anything (to close an open panel). */
+async function press(pid) {
   const item = await inMenuBar(pid);
   execFileSync(paths.meterAx, ['press', String(pid)]);
+  return item;
+}
+
+/** Clicks the menu bar item (an Accessibility press, as an assistive app clicks it). */
+async function click(pid) {
+  const item = await press(pid);
   const deadline = Date.now() + 3000;
   let windows = [];
   while (windows.length === 0 && Date.now() < deadline) {
@@ -263,6 +269,6 @@ async function watchTexts(pid, durationMs) {
 
 module.exports = {
   textsNow, lineStarting, watchTexts,
-  click, capture: captureNow, panelWindow, clickAndCapture, textsReading, theGraph, graphs, legend, legendValue,
+  click, press, capture: captureNow, panelWindow, clickAndCapture, textsReading, theGraph, graphs, legend, legendValue,
   legendHues, linePixels, hueDistance, centreOf, pixelsIn, isColoured, hueOf,
 };
