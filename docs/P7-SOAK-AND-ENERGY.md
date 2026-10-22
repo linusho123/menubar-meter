@@ -119,17 +119,17 @@ node scripts/checks/energy-check.js
 ```
 
 It checks that the Mac is on battery and the installed meter is running, starts a **positive
-control** (a stand-in app of the harness's own, named `EnergyControl`, busy on two cores; it ends
+control** (a stand-in app of the harness's own, named `EnergyControl`, busy on four cores, which shows briefly in the Dock as a regular app; it ends
 it by its pid and start time when done), then opens the battery menu in the menu bar (an
 Accessibility press, as an assistive app presses it; the pointer doesn't move), reads every element
-in it and closes it, repeating every 20 seconds for up to 5 minutes until the control is listed
+in it and closes it, repeating every 30 seconds for up to 10 minutes until the control is listed
 under *Using Significant Energy*. It also reads the meter's state, CPU time (twice, 10 seconds
 apart) and status item. It writes `~/Library/Logs/menubar-meter-checks/energy-report.json`. You
 will see the battery menu open and close a few times. If it says the Mac is not on battery, it
 wrote nothing.
 
 **If it says the control was never listed**, macOS didn't call the control significant in those
-5 minutes, and a menu that lists nothing proves nothing: run it again later in the day. A report
+10 minutes, and a menu that lists nothing proves nothing: run it again later in the day. A report
 whose menu can't be read (no energy section, or a section with no readable app) fails, and says
 "unreadable", which is not the same as the meter being listed.
 

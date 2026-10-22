@@ -2,9 +2,9 @@
 // The battery-menu read for "never an energy hog" (D75, Q3), run by the user at the end of a day
 // on battery (docs/P7-SOAK-AND-ENERGY.md): `node scripts/checks/energy-check.js`. It checks the
 // Mac is on battery and the installed meter is running, runs a positive control (a stand-in app of
-// the harness's own, busy on two cores, ended by its pid and start time when done), opens the
+// the harness's own, busy on four cores, ended by its pid and start time when done), opens the
 // battery menu through Accessibility (meter-ax, as an assistive app presses a menu bar item; the
-// pointer never moves), reads every element in it until the control is listed (up to 5 minutes),
+// pointer never moves), reads every element in it until the control is listed (up to 10 minutes),
 // closes it again and writes energy-report.json with what macOS showed:
 //   { at, power (pmset -g batt),
 //     powerLog (pmset -g log, from its last "Using AC" line to the end: the power-source lines and
@@ -28,7 +28,8 @@ const standIn = path.join(root, '.build', 'release', 'meter-standin');
 const dir = process.env.METER_CHECKS_DIR || path.join(os.homedir(), 'Library', 'Logs', 'menubar-meter-checks');
 const INSTALLED = process.env.METER_ENERGY_PROGRAM || '/Applications/Meter.app/Contents/MacOS/Meter';
 const CONTROL_NAME = 'EnergyControl';
-const CONTROL_SECONDS = Number(process.env.METER_ENERGY_CONTROL_SECONDS) || 300;
+const CONTROL_THREADS = 4;
+const CONTROL_SECONDS = Number(process.env.METER_ENERGY_CONTROL_SECONDS) || 600;
 
 // pmset's log runs to megabytes.
 const run = (file, args) => execFileSync(file, args, { encoding: 'utf8', maxBuffer: 1 << 28 });
@@ -72,7 +73,7 @@ const statTime = (pid) => {
   return { stat, time };
 };
 
-/** The positive control: a stand-in app of the harness's own, busy on two cores. */
+/** The positive control: a stand-in app of the harness's own, busy on four cores. */
 function startControl() {
   if (!fs.existsSync(standIn)) stop(`build the harness helpers first (npm run build:app): no ${standIn}`);
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'meter-energy-control-'));
@@ -92,7 +93,7 @@ function startControl() {
 </dict></plist>
 `);
   try { execFileSync('codesign', ['--force', '--sign', '-', app], { stdio: 'ignore' }); } catch { /* unsigned still runs */ }
-  const child = spawn(file, [path.join(base, 'record'), path.join(base, 'control'), '2'], { stdio: 'ignore' });
+  const child = spawn(file, [path.join(base, 'record'), path.join(base, 'control'), String(CONTROL_THREADS)], { stdio: 'ignore' });
   const started = squeeze(run('ps', ['-o', 'lstart=', '-p', String(child.pid)]));
   return {
     pid: child.pid,
@@ -159,7 +160,7 @@ async function main() {
       }
       const apps = menu.flatMap((w) => w.elements).filter((e) => e.text).map((e) => e.text);
       seen = apps.includes(CONTROL_NAME);
-      if (!seen && Date.now() < deadline) await sleep(20000);
+      if (!seen && Date.now() < deadline) await sleep(30000);
     } while (!seen && Date.now() < deadline);
   } finally {
     onExit();
