@@ -322,9 +322,13 @@ module.exports = (reg) => {
     const m = required(w.meter, 'meter');
     assert.deepStrictEqual(windowsOf(m.pid), [], 'no window of its own');
     await panel.click(m.pid);
-    const texts = panel.textsNow(m.pid).filter((t) => typeof t === 'string');
+    // Every element the panel shows, its rows and buttons too, as Accessibility reads them.
+    const [window] = windowsOf(m.pid);
+    const texts = [window.title, ...window.elements.map((e) => e.text)].filter((t) => typeof t === 'string');
+    assert.ok(texts.includes('Quit Meter'), 'the panel was read whole');
     const offers = texts.filter((t) => /update|upgrade|new version|download|install/i.test(t));
     assert.deepStrictEqual(offers, [], 'nothing in the panel offers an update');
+    assert.strictEqual(windowsOf(m.pid).length, 1, 'no window but the panel');
     // It never asks anyone whether there is one: no network connection of its own.
     const sockets = spawnLsof(m.pid);
     assert.deepStrictEqual(sockets, [], 'the meter holds no network connection');
