@@ -16,6 +16,8 @@ private final class FixedInputs: MeterInputs {
   func memoryPages() -> MemoryPages? { pages }
   func gpuPerformanceStatistics() -> [String: Int]? { gpu }
   func temperatureSensors() -> [String: Double]? { sensors }
+  func networkInterfaces(now: Double) -> [InterfaceCounters]? { nil }
+  func diskCounters(now: Double) -> [String: ByteCounts]? { nil }
 
   func addLoad(user: UInt64, system: UInt64, idle: UInt64) {
     ticks?.user += user

@@ -235,7 +235,34 @@ function linePixels(capture) {
   });
 }
 
+/** The panel's texts the user reads now, through Accessibility. */
+const textsNow = (pid) => ax(['texts', String(pid)]);
+
+/** The one text the user reads that starts with `prefix` ("Net ", "Disk "), or undefined. */
+const lineStarting = (textList, prefix) => textList.find((t) => typeof t === 'string' && t.startsWith(prefix));
+
+/**
+ * Watches the open panel's texts through Accessibility for `durationMs`: `seen` holds
+ * `{ at, texts }` each time they change, stamped by the watcher as it reads them.
+ */
+async function watchTexts(pid, durationMs) {
+  const { spawn } = require('node:child_process');
+  const readline = require('node:readline');
+  const child = spawn(paths.meterAx, ['watch-texts', String(pid), String(durationMs)]);
+  const seen = [];
+  readline.createInterface({ input: child.stdout }).on('line', (line) => {
+    const tab = line.indexOf('\t');
+    seen.push({ at: Number(line.slice(0, tab)), texts: JSON.parse(line.slice(tab + 1)) });
+  });
+  const done = new Promise((resolve) => child.on('exit', resolve));
+  const deadline = Date.now() + 3000;
+  while (seen.length === 0 && Date.now() < deadline) await sleep(10);
+  if (seen.length === 0) throw new Error('the Accessibility watcher saw no panel');
+  return { seen, done, stop: () => child.kill('SIGTERM') };
+}
+
 module.exports = {
+  textsNow, lineStarting, watchTexts,
   click, capture: captureNow, panelWindow, clickAndCapture, textsReading, theGraph, graphs, legend, legendValue,
   legendHues, linePixels, hueDistance, centreOf, pixelsIn, isColoured, hueOf,
 };

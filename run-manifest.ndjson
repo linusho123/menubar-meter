@@ -35,8 +35,8 @@
 {"file":"features/menu-bar-readout.feature","title":"A value with no fresh reading turns into a dash [2]","status":"passed"}
 {"file":"features/menu-bar-readout.feature","title":"A value with no fresh reading turns into a dash [3]","status":"passed"}
 {"file":"features/menu-bar-readout.feature","title":"A value with no fresh reading turns into a dash [4]","status":"passed"}
-{"file":"features/menu-bar-readout.feature","title":"A value with no fresh reading turns into a dash [5]","status":"unbound"}
-{"file":"features/menu-bar-readout.feature","title":"A value with no fresh reading turns into a dash [6]","status":"unbound"}
+{"file":"features/menu-bar-readout.feature","title":"A value with no fresh reading turns into a dash [5]","status":"passed"}
+{"file":"features/menu-bar-readout.feature","title":"A value with no fresh reading turns into a dash [6]","status":"passed"}
 {"file":"features/menu-bar-readout.feature","title":"CPU matches Activity Monitor's total load","status":"passed"}
 {"file":"features/menu-bar-readout.feature","title":"GPU is macOS's own overall GPU reading","status":"passed"}
 {"file":"features/menu-bar-readout.feature","title":"RAM matches Activity Monitor's Memory Used [1]","status":"passed"}
@@ -60,8 +60,8 @@
 {"file":"features/menu-bar-readout.feature","title":"The readout follows a change within a second [5]","status":"passed"}
 {"file":"features/menu-bar-readout.feature","title":"The readout follows a change within a second [6]","status":"passed"}
 {"file":"features/menu-bar-readout.feature","title":"The temperature rises under load","status":"passed"}
-{"file":"features/network-and-disk.feature","title":"Network and disk match Activity Monitor [1]","status":"unbound"}
-{"file":"features/network-and-disk.feature","title":"Network and disk match Activity Monitor [2]","status":"unbound"}
+{"file":"features/network-and-disk.feature","title":"Network and disk match Activity Monitor [1]","status":"passed"}
+{"file":"features/network-and-disk.feature","title":"Network and disk match Activity Monitor [2]","status":"passed"}
 {"file":"features/own-cost.feature","title":"The meter is never flagged as an energy hog","status":"unbound"}
 {"file":"features/own-cost.feature","title":"The meter's memory stays under its line [1]","status":"unbound"}
 {"file":"features/own-cost.feature","title":"The meter's memory stays under its line [2]","status":"unbound"}

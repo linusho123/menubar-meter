@@ -10,6 +10,10 @@ import ApplicationServices
 //   meter-ax press <pid>         press the app's status item, as a click on it does
 //   meter-ax windows <pid>       the app's windows and every element in them, as JSON: role,
 //                                text, frame, and for text the frame of each word
+//   meter-ax texts <pid>         the texts in the app's windows, in order, as a JSON array: a
+//                                quick read, with no frames
+//   meter-ax watch-texts <pid> <ms>
+//                                print "<epoch ms>\t<texts as JSON>" each time they change
 //   meter-ax press-button <pid> <title>
 //                                press the button titled <title> in the app's windows
 //   meter-ax move <x> <y>        move the pointer to a point on screen, as the mouse moves it
@@ -159,6 +163,22 @@ func describe(_ element: AXUIElement, into list: inout [Element]) {
   }
 }
 
+/// The static texts in the app's windows, in order.
+func windowTexts(pid: Int32) -> [String] {
+  var texts: [String] = []
+  func collect(_ element: AXUIElement) {
+    if attribute(element, kAXRoleAttribute) as? String == kAXStaticTextRole {
+      texts.append(title(element))
+    }
+    for child in attribute(element, kAXChildrenAttribute) as? [AXUIElement] ?? [] {
+      collect(child)
+    }
+  }
+  let app = AXUIElementCreateApplication(pid)
+  for window in attribute(app, kAXWindowsAttribute) as? [AXUIElement] ?? [] { collect(window) }
+  return texts
+}
+
 func windows(pid: Int32) -> [Window] {
   let app = AXUIElementCreateApplication(pid)
   let list = attribute(app, kAXWindowsAttribute) as? [AXUIElement] ?? []
@@ -276,6 +296,25 @@ case "press":
 case "windows":
   guard arguments.count == 3, let pid = Int32(arguments[2]) else { fail("usage: windows <pid>") }
   emit(windows(pid: pid))
+case "texts":
+  guard arguments.count == 3, let pid = Int32(arguments[2]) else { fail("usage: texts <pid>") }
+  emit(windowTexts(pid: pid))
+case "watch-texts":
+  guard arguments.count == 4, let pid = Int32(arguments[2]), let duration = Double(arguments[3])
+  else { fail("usage: watch-texts <pid> <ms>") }
+  let end = Date().addingTimeInterval(duration / 1000)
+  var last: [String]?
+  setvbuf(stdout, nil, _IOLBF, 0)
+  let encoder = JSONEncoder()
+  while Date() < end {
+    let current = windowTexts(pid: pid)
+    if current != last, let data = try? encoder.encode(current) {
+      last = current
+      let stamp = Int64((Date().timeIntervalSince1970 * 1000).rounded(.down))
+      print("\(stamp)\t\(String(decoding: data, as: UTF8.self))")
+    }
+    usleep(5000)
+  }
 case "press-button":
   guard arguments.count == 4, let pid = Int32(arguments[2]) else {
     fail("usage: press-button <pid> <title>")
@@ -361,7 +400,7 @@ case "front":
 default:
   fail(
     "usage: meter-ax item <pid> | items | watch <pid> <ms> | press <pid> | windows <pid>"
-      + " | press-button <pid> <title> | move <x> <y> | click <x> <y> | pointer"
+      + " | texts <pid> | watch-texts <pid> <ms> | press-button <pid> <title> | move <x> <y> | click <x> <y> | pointer"
       + " | cell <pid> <key column> <key> <column>"
       + " | front")
 }
