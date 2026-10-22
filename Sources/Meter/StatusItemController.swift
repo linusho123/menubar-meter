@@ -25,6 +25,9 @@ final class StatusItemController: NSObject {
     item.button?.action = #selector(click(_:))
   }
 
+  /// The item's button, which the panel drops down under.
+  var button: NSStatusBarButton? { item.button }
+
   @objc private func click(_ sender: NSStatusBarButton) {
     clicked(sender)
   }

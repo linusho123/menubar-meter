@@ -10,11 +10,18 @@
 set -eu
 cd "$(dirname "$0")/.."
 
-bundle() { # <binary> <bundle path>
+bundle() { # <binary> <bundle path> [identifier] [version]
+  id=${3:-local.menubar-meter.Meter}
   rm -rf "$2"
-  mkdir -p "$2/Contents/MacOS"
+  mkdir -p "$2/Contents/MacOS" "$2/Contents/Library/LaunchAgents"
   cp app/Info.plist "$2/Contents/Info.plist"
+  plutil -replace CFBundleIdentifier -string "$id" "$2/Contents/Info.plist"
+  if [ -n "${4:-}" ]; then plutil -replace CFBundleShortVersionString -string "$4" "$2/Contents/Info.plist"; fi
   cp "$1" "$2/Contents/MacOS/Meter"
+  # The login job macOS starts at every login and keeps alive after a crash, labelled by the
+  # bundle's identifier, written from the meter's own rules (KeepAlive in MeterCore).
+  "$1" --launch-agent-plist "$id" >"$2/Contents/Library/LaunchAgents/$id.plist"
+  plutil -lint -s "$2/Contents/Library/LaunchAgents/$id.plist"
   codesign --force --sign - "$2" >/dev/null 2>&1
 }
 
@@ -27,6 +34,18 @@ bundle .build/release/Meter build/Meter.app
 
 swift build -c release --product Meter --scratch-path .build/test -Xswiftc -DMETER_TEST_SOURCE
 bundle .build/test/release/Meter build/test/Meter.app
+
+# The installer: build/Meter.pkg installs the release app in /Applications, registers its login
+# job and opens it (D83); the same package over an older copy replaces it (D84).
+sh scripts/build-pkg.sh build/Meter.app build/Meter.pkg
+# The harness's packages: the test app under its own identifier (never the installed meter's),
+# an older and a newer version, installed only into scratch folders.
+pkgtest=local.menubar-meter.Meter.pkgtest
+mkdir -p build/test/pkg
+for v in 0.0.1 0.0.2; do
+  bundle .build/test/release/Meter "build/test/pkg/$v/Meter.app" "$pkgtest" "$v"
+  sh scripts/build-pkg.sh "build/test/pkg/$v/Meter.app" "build/test/pkg/Meter-$v.pkg"
+done
 
 # The stand-in app: the stand-in program bundled as an app named Xcode, with its own identifier.
 standin=build/test/standins/Xcode.app
@@ -49,4 +68,4 @@ cat >"$standin/Contents/Info.plist" <<'PLIST'
 PLIST
 codesign --force --sign - "$standin" >/dev/null 2>&1
 
-echo "built build/Meter.app and build/test/Meter.app"
+echo "built build/Meter.app, build/Meter.pkg and build/test/Meter.app"

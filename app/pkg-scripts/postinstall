@@ -1,0 +1,14 @@
+#!/bin/sh
+# Runs after the installer has put Meter.app in place ($2 is the install folder). Opens the new
+# copy as the user at the screen: it registers its login job with macOS, starts it, or restarts
+# an older running version into the new one (D83, D84). A new instance (-n), so an older copy
+# that is running does not take the open for itself.
+app="$2/Meter.app"
+if [ "$(id -u)" -eq 0 ]; then
+  user=$(stat -f %Su /dev/console)
+  uid=$(id -u "$user")
+  /bin/launchctl asuser "$uid" /usr/bin/sudo -u "$user" /usr/bin/open -n "$app"
+else
+  /usr/bin/open -n "$app"
+fi
+exit 0

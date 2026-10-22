@@ -25,6 +25,8 @@ final class PanelController {
   private let diskLine: NSTextField
   private let list: TaskListView
   private var outsideClicks: Any?
+  /// Told each time the panel opens (true) or closes (false).
+  var onOpenChange: ((Bool) -> Void)?
 
   /// The rows on show, and the row whose End button the pointer rests on (D100).
   private var shownRows: [HeavyRow] = []
@@ -136,6 +138,8 @@ final class PanelController {
 
     openRow.target = self
     openRow.action = #selector(openActivityMonitor(_:))
+    quitRow.target = self
+    quitRow.action = #selector(quitMeter(_:))
 
     // End, Ending… and Force Quit act on the task the row shows, never on a row (D60, D105).
     list.onEnd = { [weak self] task in
@@ -177,14 +181,24 @@ final class PanelController {
     outsideClicks = NSEvent.addGlobalMonitorForEvents(matching: clicks) { [weak self] _ in
       MainActor.assumeIsolated { self?.close() }
     }
+    onOpenChange?(true)
   }
 
   func close() {
+    let wasOpen = isOpen
     panel.orderOut(nil)
     if let outsideClicks { NSEvent.removeMonitor(outsideClicks) }
     outsideClicks = nil
     hold.reset()
     tasks.reset()
+    if wasOpen { onOpenChange?(false) }
+  }
+
+  /// `Quit Meter`: the meter leaves the menu bar at once (D65). It exits with the status the
+  /// login job is kept down after, so it stays gone until the next login (D104).
+  @objc private func quitMeter(_ sender: Any?) {
+    close()
+    exit(KeepAlive.quitStatus)
   }
 
   /// Redraws the graph and the legend from the engine, and re-ranks the heavy tasks, when the
