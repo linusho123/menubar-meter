@@ -114,11 +114,11 @@ Each needs a ruling on how it counts as bound; until then it stays in `wip`.
   log-in. Options: bind them to macOS's own login-item registry (it lists
   the meter as enabled) plus one manual log-in check by the visionary
   recorded in the phase report; or keep the login steps manual only.
-- **Q2 (P7) — the 7-day memory row** (D76). Options: a background soak on
+- **Q2 (P7) — the 7-day memory row** (D76). Ruled 2026-10-22: the background soak (the first option). Options: a background soak on
   this Mac (plugged in, lid open) that reports after seven days while later
   work continues, the row staying in `wip` until it reports; or the visionary
   reads the meter's Memory in Activity Monitor after a normal week of use.
-- **Q3 (P7) — "Apps Using Significant Energy"** (D75). The battery menu is
+- **Q3 (P7) — "Apps Using Significant Energy"** (D75). Ruled 2026-10-22: the harness reads the battery menu after an all-day run on battery (the first option). The battery menu is
   readable through Accessibility only while it is open; options: the harness
   opens it and reads it after an all-day run on battery, or the visionary
   checks it by eye at the end of a day.
