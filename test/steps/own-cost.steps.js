@@ -95,6 +95,8 @@ module.exports = (reg) => {
       const limit = Number(line);
       const said = `ps over ${c.seconds.toFixed(1)} s: mean ${c.mean.toFixed(3)}%, busiest second ${c.peak.toFixed(3)}% of the whole Mac`;
       assert.ok(c.seconds >= 59.5, `a whole minute was measured: ${said}`);
+      // A stopped or hung meter uses no CPU: it must have been alive for the whole minute.
+      assert.deepStrictEqual(c.alive, [], `the meter was alive and running through the minute: ${said}`);
       assert.ok(c.mean < limit, `the meter's CPU over the minute is under ${limit}%: ${said}`);
       // A spike is never averaged away: the busiest second is held to the same line.
       assert.ok(c.peak < limit, `the meter's busiest second is under ${limit}% too: ${said}`);
