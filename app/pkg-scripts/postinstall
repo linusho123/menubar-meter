@@ -2,13 +2,18 @@
 # Runs after the installer has put Meter.app in place ($2 is the install folder). Opens the new
 # copy as the user at the screen: it registers its login job with macOS, starts it, or restarts
 # an older running version into the new one (D83, D84). A new instance (-n), so an older copy
-# that is running does not take the open for itself.
+# that is running does not take the open for itself. Never opens it as root: with nobody at the
+# screen (the login window, an ssh or MDM install) it opens nothing, and the job registers at
+# the user's first open or the next login. Commands are called by name (the installer's PATH).
 app="$2/Meter.app"
 if [ "$(id -u)" -eq 0 ]; then
   user=$(stat -f %Su /dev/console)
-  uid=$(id -u "$user")
-  /bin/launchctl asuser "$uid" /usr/bin/sudo -u "$user" /usr/bin/open -n "$app"
+  case "$user" in
+    "" | root | loginwindow) exit 0 ;;
+  esac
+  uid=$(id -u "$user") || exit 0
+  launchctl asuser "$uid" sudo -u "$user" open -n "$app"
 else
-  /usr/bin/open -n "$app"
+  open -n "$app"
 fi
 exit 0
