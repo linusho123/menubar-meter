@@ -70,7 +70,8 @@ final class PanelController {
     // disk tile, then the graph's tile with its legend, its time axis and the graph.
     let actionHeight: CGFloat = 24
     let quitY: CGFloat = 8
-    let openY = quitY + actionHeight
+    // A 2 pt gap keeps Quit Meter wholly below Open Activity Monitor… at any fractional origin.
+    let openY = quitY + actionHeight + 2
     let listTile = NSRect(
       x: margin, y: openY + actionHeight + gap, width: tileWidth,
       height: list.frame.height + 2 * gap)
