@@ -33,12 +33,22 @@ public enum GraphBitmap {
 
 /// The panel's fixed layout in points, shared with the controller so a test can size the graph.
 public enum PanelLayout {
-  public static let width: Double = 384
-  public static let margin: Double = 12
-  public static let scaleWidth: Double = 34
+  /// The panel is exactly as wide as the menu bar item it drops down from; this is the item's
+  /// width at the standard menu bar font (13 pt).
+  public static let nominalWidth: Double = 296
+  public static let margin: Double = 6
+  /// The room inside each of the panel's tiles, around what it holds.
+  public static let tilePadding: Double = 8
+  public static let scaleWidth: Double = 32
   public static let plotHeight: Double = 120
   /// The gap between the scale and the graph.
   public static let scaleGap: Double = 6
-  /// The graph's width: the panel less its margins, the scale on its left and the gap after it.
-  public static var plotWidth: Double { width - 2 * margin - scaleWidth - scaleGap }
+  /// The width inside a tile, for a panel `width` wide.
+  public static func innerWidth(panel width: Double) -> Double {
+    width - 2 * margin - 2 * tilePadding
+  }
+  /// The graph's width: the inside of its tile less the scale on its left and the gap after it.
+  public static func plotWidth(panel width: Double) -> Double {
+    innerWidth(panel: width) - scaleWidth - scaleGap
+  }
 }
