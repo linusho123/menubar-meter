@@ -19,11 +19,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // The ender always acts on the real system, the test build too: it sends only to a task
     // the system itself shows is still the one its row showed.
     let ender = TaskEnder(signals: RealSignals())
-    let panel = PanelController(engine: engine, tasks: tasks, ender: ender) { [weak self] in
-      self?.clock() ?? Clock.now()
-    }
     let statusItem = StatusItemController { [weak self] button in
       self?.panel?.toggle(below: button)
+    }
+    let panel = PanelController(
+      width: statusItem.width, engine: engine, tasks: tasks, ender: ender
+    ) { [weak self] in
+      self?.clock() ?? Clock.now()
     }
     self.engine = engine
     self.panel = panel

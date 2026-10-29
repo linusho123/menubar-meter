@@ -25,6 +25,9 @@ final class StatusItemController: NSObject {
     item.button?.action = #selector(click(_:))
   }
 
+  /// The item's fixed width, which the panel takes too.
+  var width: CGFloat { item.length }
+
   /// The item's button, which the panel drops down under.
   var button: NSStatusBarButton? { item.button }
 

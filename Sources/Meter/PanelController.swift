@@ -1,18 +1,18 @@
 import AppKit
 import MeterCore
 
-/// The panel that drops down from the menu bar item: the combined five-minute graph of CPU,
+/// The panel that drops down from the menu bar item, a black card in Notch Island's style
+/// (PanelStyle): the combined five-minute graph of CPU,
 /// GPU and RAM on a fixed axis, its scale and time labels, and the legend of current values
 /// (D50, D51, D52, D19); below them the network and disk lines (D95, D96, D114), the
 /// heavy-tasks list (D10, D108), then `Open Activity
 /// Monitor…` (D59) and `Quit Meter`. It shows no peak values (D9).
 @MainActor
 final class PanelController {
-  private static let width = CGFloat(PanelLayout.width)
   private static let margin = CGFloat(PanelLayout.margin)
   private static let scaleWidth = CGFloat(PanelLayout.scaleWidth)
   private static let plotHeight = CGFloat(PanelLayout.plotHeight)
-  private static let rowHeight: CGFloat = 20
+  private static let rowHeight: CGFloat = 22
 
   private let engine: MeterEngine
   private let tasks: TaskSampler
@@ -24,6 +24,8 @@ final class PanelController {
   private let networkLine: NSTextField
   private let diskLine: NSTextField
   private let list: TaskListView
+  private let openRow = ActionRow(title: "Open Activity Monitor\u{2026}")
+  private let quitRow = ActionRow(title: "Quit Meter")
   private var outsideClicks: Any?
   /// Told each time the panel opens (true) or closes (false).
   var onOpenChange: ((Bool) -> Void)?
@@ -32,8 +34,10 @@ final class PanelController {
   private var shownRows: [HeavyRow] = []
   private var hold = PointerHold()
 
+  /// `width` is the menu bar item's: the panel drops down exactly as wide as the item.
   init(
-    engine: MeterEngine, tasks: TaskSampler, ender: TaskEnder, clock: @escaping () -> Double
+    width: CGFloat, engine: MeterEngine, tasks: TaskSampler, ender: TaskEnder,
+    clock: @escaping () -> Double
   ) {
     self.engine = engine
     self.tasks = tasks
@@ -44,37 +48,45 @@ final class PanelController {
     networkLine = NSTextField(labelWithString: "")
     diskLine = NSTextField(labelWithString: "")
     list = TaskListView(
-      width: Self.width - 2 * Self.margin, rowHeight: Self.rowHeight,
+      width: CGFloat(PanelLayout.innerWidth(panel: Double(width))), rowHeight: Self.rowHeight,
       rows: HeavyTasks.cpuRows + 2)
 
-    let font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
-    func label(_ text: String, alignment: NSTextAlignment) -> NSTextField {
-      let field = NSTextField(labelWithString: text)
-      field.font = font
-      field.textColor = .secondaryLabelColor
-      field.alignment = alignment
-      field.sizeToFit()
-      return field
+    func caption(_ text: String, alignment: NSTextAlignment) -> NSTextField {
+      PanelStyle.label(
+        text, font: PanelStyle.caption, color: PanelStyle.tertiary, alignment: alignment)
     }
 
     let margin = Self.margin
-    let plotX = margin + Self.scaleWidth + CGFloat(PanelLayout.scaleGap)
-    let plotWidth = Self.width - plotX - margin
-    let legendHeight: CGFloat = 18
-    let timeHeight = ceil(font.boundingRectForFont.height)
-    // From the bottom: Quit Meter, Open Activity Monitor…, the heavy-tasks list, the disk and
-    // network lines, the legend, the time axis, the graph.
-    let actionsHeight = 2 * Self.rowHeight + 2
-    let listY = margin + actionsHeight + 8
+    let padding = CGFloat(PanelLayout.tilePadding)
+    let tileWidth = width - 2 * margin
+    let innerX = margin + padding
+    let innerWidth = tileWidth - 2 * padding
+    let plotX = innerX + Self.scaleWidth + CGFloat(PanelLayout.scaleGap)
+    let plotWidth = CGFloat(PanelLayout.plotWidth(panel: Double(width)))
     let lineHeight: CGFloat = 18
-    let diskY = listY + list.frame.height + 8
-    let networkY = diskY + lineHeight
-    let legendY = networkY + lineHeight + 4
-    let plotY = legendY + legendHeight + 6 + timeHeight + 4
-    let height = plotY + Self.plotHeight + margin
+    let timeHeight = ceil(PanelStyle.caption.boundingRectForFont.height)
+    let gap: CGFloat = 8
+    // From the bottom: Quit Meter, Open Activity Monitor…, the heavy-tasks tile, the network and
+    // disk tile, then the graph's tile with its legend, its time axis and the graph.
+    let actionHeight: CGFloat = 24
+    let quitY: CGFloat = 8
+    let openY = quitY + actionHeight
+    let listTile = NSRect(
+      x: margin, y: openY + actionHeight + gap, width: tileWidth,
+      height: list.frame.height + 2 * gap)
+    let ratesTile = NSRect(
+      x: margin, y: listTile.maxY + gap, width: tileWidth, height: 2 * lineHeight + 12)
+    let graphTileY = ratesTile.maxY + gap
+    let legendY = graphTileY + padding - 2
+    let timeY = legendY + lineHeight + 2
+    let plotY = timeY + timeHeight + 4
+    let graphTile = NSRect(
+      x: margin, y: graphTileY, width: tileWidth,
+      height: plotY + Self.plotHeight + padding - graphTileY)
+    let height = graphTile.maxY + margin
 
     panel = NSPanel(
-      contentRect: NSRect(x: 0, y: 0, width: Self.width, height: height),
+      contentRect: NSRect(x: 0, y: 0, width: width, height: height),
       styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
     panel.level = .popUpMenu
     panel.isOpaque = false
@@ -82,58 +94,55 @@ final class PanelController {
     panel.hasShadow = true
     panel.hidesOnDeactivate = false
     panel.isReleasedWhenClosed = false
+    panel.appearance = PanelStyle.appearance
     panel.setAccessibilityTitle("Meter")
 
-    let content = PanelBackground(frame: NSRect(x: 0, y: 0, width: Self.width, height: height))
+    let content = PanelCard(frame: NSRect(x: 0, y: 0, width: width, height: height))
     panel.contentView = content
+    for frame in [graphTile, ratesTile, listTile] { content.addSubview(Tile(frame: frame)) }
 
     graph.frame = NSRect(x: plotX, y: plotY, width: plotWidth, height: Self.plotHeight)
     content.addSubview(graph)
 
     // The scale, 0% at the bottom line and 100% at the top line (D50).
     for (text, fraction) in [("100%", 1.0), ("0%", 0.0)] {
-      let field = label(text, alignment: .right)
+      let field = caption(text, alignment: .right)
       let lineY = plotY + graph.lineY(fraction)
       field.frame = NSRect(
-        x: margin, y: lineY - field.frame.height / 2, width: Self.scaleWidth,
+        x: innerX, y: lineY - field.frame.height / 2, width: Self.scaleWidth,
         height: field.frame.height)
       content.addSubview(field)
     }
 
     // The time axis, always the whole five minutes (D51).
-    let timeY = plotY - 4 - timeHeight
-    let past = label("5 min ago", alignment: .left)
+    let past = caption("5 min ago", alignment: .left)
     past.frame.origin = NSPoint(x: plotX, y: timeY)
     content.addSubview(past)
-    let now = label("now", alignment: .right)
+    let now = caption("now", alignment: .right)
     now.frame.origin = NSPoint(x: plotX + plotWidth - now.frame.width, y: timeY)
     content.addSubview(now)
 
-    legend.frame = NSRect(x: plotX, y: legendY, width: plotWidth, height: legendHeight)
+    legend.frame = NSRect(x: innerX, y: legendY, width: innerWidth, height: lineHeight)
     legend.lineBreakMode = .byClipping
     content.addSubview(legend)
 
     // The network and disk lines, below the legend: current values only, no history (D95, D96).
-    for (line, y) in [(networkLine, networkY), (diskLine, diskY)] {
-      line.frame = NSRect(x: plotX, y: y, width: plotWidth, height: lineHeight)
+    let lines = [(networkLine, ratesTile.minY + 6 + lineHeight), (diskLine, ratesTile.minY + 6)]
+    for (line, y) in lines {
+      line.frame = NSRect(x: innerX, y: y, width: innerWidth, height: lineHeight)
       line.lineBreakMode = .byClipping
-      line.font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+      line.font = PanelStyle.body
       content.addSubview(line)
     }
 
     // The heavy-tasks list, below the graph (D10).
-    list.frame.origin = NSPoint(x: margin, y: listY)
+    list.frame.origin = NSPoint(x: innerX, y: listTile.minY + gap)
     content.addSubview(list)
 
     // Its last rows: Open Activity Monitor… (D59), then Quit Meter at the bottom.
-    let openRow = ActionRow(title: "Open Activity Monitor\u{2026}")
-    openRow.frame = NSRect(
-      x: margin, y: margin + Self.rowHeight + 2, width: Self.width - 2 * margin,
-      height: Self.rowHeight)
+    openRow.frame = NSRect(x: margin, y: openY, width: tileWidth, height: actionHeight)
     content.addSubview(openRow)
-    let quitRow = ActionRow(title: "Quit Meter")
-    quitRow.frame = NSRect(
-      x: margin, y: margin, width: Self.width - 2 * margin, height: Self.rowHeight)
+    quitRow.frame = NSRect(x: margin, y: quitY, width: tileWidth, height: actionHeight)
     content.addSubview(quitRow)
 
     openRow.target = self
@@ -191,6 +200,9 @@ final class PanelController {
     outsideClicks = nil
     hold.reset()
     tasks.reset()
+    // A pointer resting on a button when the panel closed does not light it at the next opening.
+    for button in [openRow, quitRow] { button.resetHover() }
+    list.resetHover()
     if wasOpen { onOpenChange?(false) }
   }
 
@@ -216,8 +228,8 @@ final class PanelController {
     graph.show(engine.history, now: at)
     legend.attributedStringValue = Self.legendText(engine.legend(now: at))
     let rates = engine.netDisk(now: at)
-    networkLine.stringValue = ByteRateText.network(rates.network)
-    diskLine.stringValue = ByteRateText.disk(rates.disk)
+    networkLine.attributedStringValue = PanelStyle.valuesText(ByteRateText.network(rates.network))
+    diskLine.attributedStringValue = PanelStyle.valuesText(ByteRateText.disk(rates.disk))
     guard isOpen, now != nil else { return }
     followPointer()
     if tasks.sample(now: clock()) { showList() }
@@ -291,31 +303,22 @@ final class PanelController {
 
   /// The legend's text (D19), each line's label in that line's colour.
   private static func legendText(_ values: LegendValues) -> NSAttributedString {
-    let size = NSFont.systemFontSize
     let text = NSMutableAttributedString(
       string: Legend.text(values),
-      attributes: [
-        .font: NSFont.monospacedDigitSystemFont(ofSize: size, weight: .regular),
-        .foregroundColor: NSColor.labelColor,
-      ])
+      attributes: [.font: PanelStyle.body, .foregroundColor: PanelStyle.primary])
     var offset = 0
     for metric in HistoryMetric.allCases {
       let label = NSRange(location: offset, length: (metric.label as NSString).length)
       text.addAttributes(
-        [.font: NSFont.boldSystemFont(ofSize: size), .foregroundColor: GraphView.color(metric)],
+        [
+          .font: NSFont.systemFont(ofSize: PanelStyle.body.pointSize, weight: .semibold),
+          .foregroundColor: GraphView.color(metric),
+        ],
         range: label)
       let entry = Legend.entry(metric, values.value(metric)) + Legend.separator
       offset += (entry as NSString).length
     }
     return text
-  }
-}
-
-/// The panel's opaque rounded background.
-private final class PanelBackground: NSView {
-  override func draw(_ dirtyRect: NSRect) {
-    NSColor.windowBackgroundColor.setFill()
-    NSBezierPath(roundedRect: bounds, xRadius: 8, yRadius: 8).fill()
   }
 }
 
@@ -400,18 +403,24 @@ final class GraphView: NSView {
   }
 
   private func paint() {
-    NSColor.textBackgroundColor.setFill()
-    bounds.fill()
-    NSColor.separatorColor.setStroke()
-    let frame = NSBezierPath(rect: bounds.insetBy(dx: 0.5, dy: 0.5))
-    frame.lineWidth = 1
-    frame.stroke()
+    // No background of its own: the graph sits on its tile. Faint grid lines at 0%, 50% and 100%
+    // stand in for a frame; they are grey, never a line's colour.
+    PanelStyle.grid.setStroke()
+    for fraction in [0.0, 0.5, 1.0] {
+      let y = lineY(fraction)
+      let rule = NSBezierPath()
+      rule.lineWidth = 0.5
+      rule.move(to: NSPoint(x: 0, y: y))
+      rule.line(to: NSPoint(x: bounds.width, y: y))
+      rule.stroke()
+    }
 
     for metric in HistoryMetric.allCases {
       Self.color(metric).setStroke()
       for run in history.lines(metric, now: now) {
         let path = NSBezierPath()
-        path.lineWidth = 1.5
+        path.lineWidth = 1.75
+        path.lineCapStyle = .round
         path.lineJoinStyle = .round
         for (index, point) in run.enumerated() {
           let at = NSPoint(x: bounds.width * CGFloat(point.x), y: lineY(point.y))
